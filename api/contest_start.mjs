@@ -1,5 +1,6 @@
 // contest_start.mjs
 import pool from '../db.mjs';
+import config from '../config.mjs';
 
 async function contest_start(ctx, next) {
     const { room_id } = ctx.request.body;
@@ -16,33 +17,20 @@ async function contest_start(ctx, next) {
             ctx.body = { success: false, error: '房间不存在' };
             return;
         }
-        let isReady = true;
-        let acount = row[0].user.A.length, bcount = row[0].user.B.length;
-        for (let i = 0; i < acount; i++) {
-            if (row[0].user.A[i].ready == false) {
-                isReady = false;
-                break;
-            }
-        }
-        for (let i = 0; i < bcount; i++) {
-            if (row[0].user.B[i].ready == false) {
-                isReady = false;
-                break;
-            }
-        }
-        if (isReady == false) {
+        const users = [...row[0].user.A, ...row[0].user.B];
+        if (users.some(u => !u.ready)) {
             ctx.status = 403;
             ctx.body = { success: false, error: '房间未准备' };
             return;
         }
-        if (acount == 0 || bcount == 0) {
+        const user = row[0].user;
+        if (user.A.length === 0 || user.B.length === 0) {
             ctx.status = 403;
             ctx.body = { success: false, error: 'A 或 B 队伍人数为 0' };
             return;
         }
         const id = row[0].id;
         const url = row[0].url;
-        const user = row[0].user;
         for (let i = 0; i < user.A.length; i++) delete user.A[i].ready;
         for (let i = 0; i < user.B.length; i++) delete user.B[i].ready;
         const maxRating = row[0].setting.rating_highest;
@@ -54,115 +42,74 @@ async function contest_start(ctx, next) {
         const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minRating, maxRating]);
         const filteredProblems = allProblems.filter(p => !p.title.includes('ahc'));
 
-        console.log(problemCount);
-        // 根据题目数量决定难度分档
-        const getProblemsByTier = () => {
-            if (problemCount <= 3) {
-                // 题目数≤3，不分区
-                return [filteredProblems];
-            }
+        const allUsers = [...user.A, ...user.B];
+        const atnames = await Promise.all(allUsers.map(u => fetch(config.buildApiUrl(`/atname/${u.name}`)).then(res => res.text())));
+        const userAtnameMap = new Map(allUsers.map((u, i) => [u.name, atnames[i]]));
 
-            // 题目数>3，分为三个难度区间
+        const checkUserAC = async (username, task) => {
+            const atname = userAtnameMap.get(username);
+            if (!atname) return false;
+
+            for (let i = 0; i < 3; i++) { // Retry up to 3 times
+                try {
+                    const response = await Promise.race([
+                        fetch(config.buildApiUrl('/user_submissions'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: atname, task, status: 'AC' }),
+                        }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+                    ]);
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.length > 0;
+                    } else if (response.status < 500) {
+                        return false; // Don't retry for client-side errors
+                    }
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed for ${username} on ${task}:`, error.message);
+                    if (i === 2) return false; // Return false after the last attempt
+                    await new Promise(res => setTimeout(res, 1000 * (i + 1))); // Exponential backoff
+                }
+            }
+            return false;
+        };
+
+        const getProblemsByTier = (problems, count) => {
+            if (count <= 3) return [problems];
             const range = maxRating - minRating;
             const tier1Max = minRating + range * 0.3;
             const tier2Max = minRating + range * 0.8;
-
-            const tier1 = filteredProblems.filter(p => p.difficulty <= tier1Max);
-            const tier2 = filteredProblems.filter(p => p.difficulty > tier1Max && p.difficulty <= tier2Max);
-            const tier3 = filteredProblems.filter(p => p.difficulty > tier2Max);
-
-            return [tier1, tier2, tier3];
+            return [
+                problems.filter(p => p.difficulty <= tier1Max),
+                problems.filter(p => p.difficulty > tier1Max && p.difficulty <= tier2Max),
+                problems.filter(p => p.difficulty > tier2Max),
+            ];
         };
 
-        const problemTiers = getProblemsByTier();
-
-        // 并行生成并检查多个题目
         const generateValidProblem = async (problems) => {
-            let problem;
-            if (problems.length > 0) {
-                problem = problems[Math.floor(Math.random() * problems.length)];
-            } else {
-                // 如果该难度区间没有题目，则从所有题目中随机选择
-                problem = filteredProblems[Math.floor(Math.random() * filteredProblems.length)];
-            }
+            if (problems.length === 0) return null;
+            // Pick a random problem, but retry a few times if a valid one isn't found
+            for (let i = 0; i < 5; i++) {
+                const problem = problems[Math.floor(Math.random() * problems.length)];
+                if (!problem) continue;
 
-            // 并行检查用户A的AC记录
-            const checkUserAC = async (username, task, retries = 3) => {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+                const checkResults = await Promise.all(
+                    allUsers.map(u => checkUserAC(u.name, problem.url.split('/').pop()))
+                );
 
-                for (let attempt = 1; attempt <= retries; attempt++) {
-                    try {
-                        const result = await fetch("http://10.0.3.113:3001/user_submissions", {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ username, task, status: 'AC' }),
-                            signal: controller.signal
-                        });
-                        clearTimeout(timeoutId);
-
-                        if (!result.ok) {
-                            if (result.status >= 500 && attempt < retries) {
-                                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // 指数退避
-                                continue;
-                            }
-                            throw new Error(`HTTP error! status: ${result.status}`);
-                        }
-
-                        const data = await result.json();
-                        return data.length > 0;
-                    } catch (err) {
-                        clearTimeout(timeoutId);
-                        if (attempt === retries) {
-                            console.error(`Failed to check user AC after ${retries} attempts:`, err);
-                            return false;
-                        }
-                    }
+                if (!checkResults.some(hasAC => hasAC)) {
+                    return problem;
                 }
-                return false;
-            };
-
-            // 控制并发请求数量
-            const MAX_CONCURRENT_REQUESTS = 10;
-            const processInBatches = async (items, processFn) => {
-                const results = [];
-                for (let i = 0; i < items.length; i += MAX_CONCURRENT_REQUESTS) {
-                    const batch = items.slice(i, i + MAX_CONCURRENT_REQUESTS);
-                    const batchResults = await Promise.all(batch.map(processFn));
-                    results.push(...batchResults);
-                }
-                return results;
-            };
-
-            // 使用分批处理并行检查用户A和用户B
-            const [aResults, bResults] = await Promise.all([
-                processInBatches(user.A, user => checkUserAC(user.name, problem.url.split('/').pop())),
-                processInBatches(user.B, user => checkUserAC(user.name, problem.url.split('/').pop()))
-            ]);
-
-            // 如果没有用户AC过此题，则返回该题目
-            if (!aResults.some(hasAC => hasAC) && !bResults.some(hasAC => hasAC)) {
-                return problem;
             }
-            return null;
+            return null; // Return null if no valid problem is found after retries
         };
 
-        // 并行生成多个题目，确保从各难度区间均匀选择
-        const problemPromises = [];
-        if (problemTiers.length === 1) {
-            // 不分区的情况
-            for (let i = 0; i < problemCount * 2; i++) {
-                problemPromises.push(generateValidProblem(problemTiers[0]));
-            }
-        } else {
-            // 分区的情况，每个区间生成足够候选题目
-            const problemsPerTier = Math.ceil(problemCount * 2 / problemTiers.length);
-            for (const tier of problemTiers) {
-                for (let i = 0; i < problemsPerTier; i++) {
-                    problemPromises.push(generateValidProblem(tier));
-                }
-            }
-        }
+        const problemTiers = getProblemsByTier(filteredProblems, problemCount);
+        const problemPromises = problemTiers.flatMap(tier =>
+            Array.from({ length: Math.ceil(problemCount * 2 / problemTiers.length) }, () => generateValidProblem(tier.length > 0 ? tier : filteredProblems))
+        );
 
         // 等待所有题目生成完成
         const candidateProblems = (await Promise.all(problemPromises)).filter(p => p !== null);

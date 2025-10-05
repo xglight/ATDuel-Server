@@ -1,7 +1,7 @@
-// atavator.mjs
+// atavatar.mjs
 import pool from '../db.mjs';
 
-async function avator(ctx, next) {
+async function avatar(ctx, next) {
     const username = ctx.params.username;
     if (!username) {
         ctx.status = 400;
@@ -17,9 +17,9 @@ async function avator(ctx, next) {
             ctx.body = 'user not found';
             return;
         }
-        const avatorPath = rows[0].avator;
+        const avatarPath = rows[0].avatar;
         ctx.status = 200;
-        ctx.body = avatorPath;
+        ctx.body = avatarPath;
     } catch (err) {
         console.log(err);
         ctx.status = 500;
@@ -28,4 +28,4 @@ async function avator(ctx, next) {
     }
 }
 
-export default { 'GET /avator/:username': avator };
+export default { 'GET /avatar/:username': avatar };

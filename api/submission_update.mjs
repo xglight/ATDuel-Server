@@ -1,12 +1,12 @@
 // submission_update.mjs
 
 import pool from '../db.mjs';
+import config from '../config.mjs';
 
 async function processTeamSubmissions(team, problemName, subdata) {
     for (const member of team) {
-        const ATName = await fetch(`http://10.0.3.113:3001/atname/${member.name}`).then(res => res.text());
-        console.log(ATName);
-        const res = await fetch(`http://10.0.3.113:3001/user_submissions`, {
+        const ATName = await fetch(config.buildApiUrl(`/atname/${member.name}`)).then(res => res.text());
+        const res = await fetch(config.buildApiUrl(`/user_submissions`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -19,6 +19,12 @@ async function processTeamSubmissions(team, problemName, subdata) {
         const data = await res.json();
 
         for (const submission of data) {
+            const t1 = new Date(startTime);
+            const t2 = new Date(submission.time);
+            if (t2 < t1) {
+                continue;
+            }
+
             const tmp = {
                 task: problemName,
                 username: submission.username,
@@ -41,6 +47,8 @@ async function processTeamSubmissions(team, problemName, subdata) {
     }
 }
 
+let startTime;
+
 async function submission_update(ctx, next) {
     try {
         const { problemName, contestId } = ctx.request.body;
@@ -54,8 +62,10 @@ async function submission_update(ctx, next) {
         }
         let subdata = contest[0].submission || [];
 
+        startTime = contest[0].startTime;
+
         // 获取比赛队伍信息
-        const response = await fetch(`http://10.0.3.113:3001/contest/${contestId}`);
+        const response = await fetch(config.buildApiUrl(`/contest/${contestId}`));
         const { user: teams } = await response.json();
 
         // 处理两队提交记录

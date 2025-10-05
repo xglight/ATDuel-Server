@@ -84,9 +84,9 @@ async function room_user_update(ctx, next) {
                 return;
             }
 
-            const [avator] = await conn.query(`SELECT * FROM user WHERE username = ?`, [username]);
+            const [avatar] = await conn.query(`SELECT * FROM user WHERE username = ?`, [username]);
 
-            userData[teamKey].splice(pos, 0, { avator: avator[0].avator, name: username, place: pos, ready: false, score: 0 });
+            userData[teamKey].splice(pos, 0, { avatar: avatar[0].avatar, name: username, place: pos, ready: false, score: 0 });
             // 确保不超过最大人数
             userData[teamKey] = userData[teamKey].slice(0, maxPos);
         }

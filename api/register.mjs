@@ -1,7 +1,7 @@
 // register.mjs
 import pool from '../db.mjs';
 import bcrypt from 'bcrypt';
-import fs from 'fs';
+import config from '../config.mjs';
 
 async function register(ctx, next) {
     const { username, password, ATName } = ctx.request.body;
@@ -12,8 +12,6 @@ async function register(ctx, next) {
         return;
     }
 
-    const config = await JSON.parse(fs.readFileSync('config.json', 'utf8'));
-
     try {
         const [rows] = await pool.execute('SELECT * FROM user WHERE username = ?', [username]);
         if (rows.length > 0) {
@@ -23,10 +21,10 @@ async function register(ctx, next) {
         }
 
         let rating = 0;
-        let avator = '';
+        let avatar = '';
 
         try {
-            const ratingText = await fetch(`http://10.0.3.113:3001/atRating/${ATName}`).then(res => res.text());
+            const ratingText = await fetch(config.buildApiUrl(`/atRating/${ATName}`)).then(res => res.text());
             rating = parseInt(ratingText) || 0;
         } catch (err) {
             console.error('register: 获取 rating 失败:', err.message);
@@ -39,16 +37,16 @@ async function register(ctx, next) {
         }
 
         try {
-            avator = await fetch(`http://10.0.3.113:3001/atAvator/${ATName}`).then(res => res.text());
+            avatar = await fetch(config.buildApiUrl(`/atavatar/${ATName}`)).then(res => res.text());
         } catch (err) {
-            console.error('register: 获取 avator 失败:', err.message);
+            console.error('register: 获取 avatar 失败:', err.message);
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         await pool.execute(
-            'INSERT INTO user (username, password, ATName, rating, avator) VALUES (?, ?, ?, ?, ?)',
-            [username, hashedPassword, ATName, rating, avator]
+            'INSERT INTO user (username, password, ATName, rating, avatar) VALUES (?, ?, ?, ?, ?)',
+            [username, hashedPassword, ATName, rating, avatar]
         );
 
         console.log('register: 用户', username, '注册成功');

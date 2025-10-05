@@ -1,8 +1,8 @@
-// atAvator.mjs
+// atavatar.mjs
 import * as cheerio from 'cheerio';
 import https from 'https';
 
-async function atAvator(ctx, next) {
+async function atavatar(ctx, next) {
     const username = ctx.params.username;
     if (!username) {
         ctx.status = 400;
@@ -30,9 +30,10 @@ async function atAvator(ctx, next) {
         });
 
         const $ = cheerio.load(data);
-        let img = $('#main-div #main-container div .avator').attr('src');
 
-        if (img === '') {
+        let img = $('#main-div #main-container div .avatar').attr('src');
+
+        if (img === '' || img === undefined) {
             img.status = 404;
             ctx.body = 'Not Found';
         } else {
@@ -47,5 +48,5 @@ async function atAvator(ctx, next) {
 }
 
 export default {
-    'GET /atAvator/:username': atAvator
+    'GET /atavatar/:username': atavatar
 }

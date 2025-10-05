@@ -1,5 +1,6 @@
 // user_contest.mjs
 import pool from '../db.mjs';
+import config from '../config.mjs';
 
 async function user_contest(ctx, next) {
     const username = ctx.params.username;
@@ -9,7 +10,7 @@ async function user_contest(ctx, next) {
         return;
     }
     try {
-        const contestid = await fetch("http://10.0.3.113:3001/user_contestid/" + username, { method: 'GET' }).then(response => response.json());
+        const contestid = await fetch(config.buildApiUrl(`/user_contestid/${username}`), { method: 'GET' }).then(response => response.json());
         if (contestid.user_contest == null) {
             ctx.status = 200;
             ctx.type = 'text/json';

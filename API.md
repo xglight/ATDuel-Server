@@ -131,7 +131,7 @@
 |  400   | json  | 参数缺失或用户名已存在 |
 |  500   | json  | 服务器错误             |
 
-### GET /avator/:username
+### GET /avatar/:username
 
 #### 说明
 
@@ -502,7 +502,7 @@
 
 ## Atcoder 相关
 
-### GET /atAvator/:username
+### GET /atavatar/:username
 
 #### 说明
 

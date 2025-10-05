@@ -3,15 +3,10 @@ import Koa from 'koa';
 import bodyParser from '@koa/bodyparser';
 import cors from '@koa/cors';
 import apiControl from './import_api.mjs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
-import serve from 'koa-static';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = new Koa();
-const port = 3001;
+const port = 3000;
 
 // 创建WebSocket服务器
 const wss = new WebSocketServer({ noServer: true });
@@ -19,10 +14,10 @@ const roomClients = new Map(); // roomId -> Set of clients
 const contestClients = new Map(); // contestId -> Set of clients
 
 // 存储消息到数据库
-async function storeMessage(contestId, teamId, sender, message, mode) {
+async function storeMessage(type, contestId, teamId, sender, message, mode) {
     await pool.query(
-        'INSERT INTO chat_messages (contest_id, team_id, sender, message, mode) VALUES (?,?,?,?,?)',
-        [contestId, teamId, sender, message, mode]
+        'INSERT INTO chat_messages (type, contest_id, team_id, sender, message, mode) VALUES (?,?,?,?,?,?)',
+        [type, contestId, teamId, sender, message, mode]
     );
 }
 
@@ -30,7 +25,7 @@ async function storeMessage(contestId, teamId, sender, message, mode) {
 async function getContestMessage(contestId, teamId = null) {
     let result;
     [result] = await pool.query(
-        `SELECT * FROM chat_messages WHERE contest_id = ? ORDER BY timestamp ASC`,
+        `SELECT * FROM chat_messages WHERE contest_id = ? AND type = "chat_message" ORDER BY timestamp ASC`,
         [contestId]
     );
     if (result.length == 0) {
@@ -80,8 +75,10 @@ async function main() {
         allowHeaders: ['*'],
     }));
 
-    // 路由和错误处理
-    const router = await apiControl(app);
+    // 路由和错误处理（添加API前缀）
+    const router = await apiControl(app, 'api', '/api');
+
+    // 使用路由中间件
     app.use(router);
 
     // 错误处理
@@ -125,10 +122,9 @@ async function main() {
                     }
                     roomClients.get(roomId).add(ws);
                     ws.roomId = roomId;
-                    console.log(`WebSocket客户端加入房间: ${roomId}`);
                 }
                 else if (data.type === 'join_contest' && data.contestId) {
-                    // 加入房间
+                    // 加入比赛
                     const contestId = data.contestId;
                     if (!contestClients.has(contestId)) {
                         contestClients.set(contestId, new Set());
@@ -137,11 +133,6 @@ async function main() {
                     ws.contestId = contestId;
 
                     ws.teamId = data.teamId; // 保存队伍ID
-
-                    const logMsg = data.isReconnect ?
-                        `客户端重连房间: ${contestId}, 队伍: ${data.teamId || '无'}` :
-                        `客户端加入房间: ${contestId}, 队伍: ${data.teamId || '无'}`;
-                    console.log(logMsg);
 
                     // 发送历史消息
                     try {
@@ -176,6 +167,7 @@ async function main() {
                     try {
                         // 存储消息
                         await storeMessage(
+                            data.type,
                             data.contestId,
                             data.mode === 'team' ? ws.teamId : null,
                             data.sender,
@@ -253,6 +245,7 @@ async function main() {
         } catch (err) {
             console.error('server: 关闭资源时出错:', err.stack);
         } finally {
+            console.log('server: 服务器已关闭');
             process.exit(0);
         }
     });

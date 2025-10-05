@@ -8,7 +8,7 @@ async function scan(router, import_apiDir) {
     const currentDir = dirname(fileURLToPath(import.meta.url));
     const fullApiPath = resolve(currentDir, import_apiDir);
 
-    console.log(`import_api: 扫描文件夹 ${fullApiPath}...`);
+    console.log(`import_api: 扫描文件夹 ${fullApiPath}`);
     let files;
 
     try {
@@ -22,7 +22,6 @@ async function scan(router, import_apiDir) {
         try {
             // 计算文件路径
             const filePath = pathToFileURL(resolve(fullApiPath, file)).href;
-            console.log(`import_api: 导入 ${filePath}...`);
 
             // 动态导入 API
             let { default: mapping } = await import(filePath);
@@ -53,8 +52,8 @@ async function scan(router, import_apiDir) {
 }
 
 // 默认扫描 `import_api` 目录
-export default async function (app, import_apiDir = 'api') {
-    const router = new Router();
+export default async function (app, import_apiDir = 'api', prefix = '') {
+    const router = new Router({ prefix });
     await scan(router, import_apiDir);
 
     // 将app实例传递给路由

@@ -12,7 +12,6 @@ async function getUserSubmission(ctx, next) {
     if (!status) status = "";
     const contest = task.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
     const url = "https://atcoder.jp/contests/" + contest + "/submissions?f.Task=" + task + "&f.LanguageName=&f.Status=" + status + "&f.User=" + username;
-    console.log('url:', url);
     try {
         const response = await fetch(
             url, {

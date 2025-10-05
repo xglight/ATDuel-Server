@@ -10,7 +10,7 @@ async function atRating(ctx, next) {
         ctx.body = "username is required";
         return;
     }
-    console.log('rating-username:', username);
+    // console.log('rating-username:', username);
     const url = 'https://atcoder.jp/users/' + username;
 
     try {

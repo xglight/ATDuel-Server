@@ -36,7 +36,7 @@ async function init() {
                     username VARCHAR(255) NOT NULL UNIQUE,
                     password VARCHAR(255) NOT NULL,
                     ATName VARCHAR(255),
-                    avator VARCHAR(255),
+                    avatar VARCHAR(255),
                     rating INT DEFAULT 0,
                     contest JSON
                 )`,
