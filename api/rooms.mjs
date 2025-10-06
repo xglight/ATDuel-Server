@@ -1,11 +1,12 @@
 // rooms.mjs
 
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function rooms(ctx, next) {
     try {
         const [rows, fields] = await pool.query('SELECT * FROM rooms');
-
+        logger.info(`rooms: 获取房间列表: ${rows.length} 个房间`);
         let result = [];
 
         for (let i = 0; i < rows.length; i++) {
@@ -27,12 +28,12 @@ async function rooms(ctx, next) {
         }
         try {
             result = JSON.stringify(result);
-        } catch (e) { console.log(e) }
+        } catch (e) { logger.error(`rooms: 解析 JSON 失败: ${e.message}`) }
         ctx.type = 'text/json';
         ctx.status = 200;
         ctx.body = result;
     } catch (err) {
-        console.error(err);
+        logger.error(`rooms: 获取房间列表失败: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

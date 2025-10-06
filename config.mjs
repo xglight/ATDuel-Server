@@ -50,10 +50,17 @@ const REGISTER_CONFIG = configData.register;
  */
 const CONTENT_CONFIG = configData.content;
 
+/**
+ * 日志等级
+ * @type {string}
+ */
+const LOG_LEVEL = configData.logLevel;
+
 export default {
     server: SERVER_CONFIG,
     mysql: MYSQL_CONFIG,
     register: REGISTER_CONFIG,
     content: CONTENT_CONFIG,
+    logLevel: LOG_LEVEL,
     buildApiUrl
 };

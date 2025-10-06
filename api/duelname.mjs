@@ -1,6 +1,8 @@
 // duelname.mjs
 
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
+
 
 async function duelname(ctx, next) {
     const username = ctx.params.username;
@@ -10,6 +12,8 @@ async function duelname(ctx, next) {
         ctx.body = { message: 'Username is required' };
         return;
     }
+
+    logger.debug(`duelname: 查询用户名: ${username}`);
 
     try {
         const [result] = await pool.query('SELECT * FROM user WHERE ATName = ?', [username]);
@@ -22,7 +26,7 @@ async function duelname(ctx, next) {
             ctx.body = result[0].username;
         }
     } catch (err) {
-        console.error(err);
+        logger.error(`duelname: 查询用户名失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = { message: 'Internal server error' };
     }

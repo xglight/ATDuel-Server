@@ -11,6 +11,8 @@ async function contest_final(ctx, next) {
         return;
     }
 
+    logger.debug(`contest_final: 结束比赛: 比赛 ID ${contestId}, 队伍 ${team}`);
+
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
@@ -51,7 +53,7 @@ async function contest_final(ctx, next) {
             message: 'contest finalized'
         };
     } catch (err) {
-        console.error(err);
+        logger.error(`contest_final: 结束比赛失败: ${err.message}`);
         if (conn) {
             await conn.rollback();
         }

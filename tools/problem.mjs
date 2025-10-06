@@ -1,9 +1,10 @@
 
 import pool from '../db.mjs';
 import axios from 'axios';
+import logger from '../logger.mjs';
 
 async function getProblem(url) {
-    console.log("获取数据:", url);
+    logger.info("获取数据:", url);
     try {
         const response = await axios.get(url, {
             headers: {
@@ -19,25 +20,26 @@ async function getProblem(url) {
             const problem = problems[i];
             const id = problem.id;
             const [rows] = await pool.execute('SELECT id FROM problem WHERE id = ?', [id]);
+            const difficulty = problem.rating == null ? -1 : problem.rating;
             if (rows.length > 0) {
-                console.log("数据已存在:", id);
+                logger.info("数据已存在，更新难度:", id, difficulty);
+                await pool.execute('UPDATE problem SET difficulty = ? WHERE id = ?', [difficulty, id]);
                 continue;
             }
-            const difficulty = problem.rating == null ? -1 : problem.rating;
             const problemurl = problem.url;
             const title = problemurl.split('/').pop() + ' - ' + problem.name;
-            console.log("插入数据:", id, difficulty, problemurl, title);
+            logger.info("插入数据:", id, difficulty, problemurl, title);
             try {
                 await pool.execute(
                     'INSERT INTO problem (id, difficulty, url, title) VALUES (?,?,?,?)'
                     , [id, difficulty, problemurl, title]);
             } catch (error) {
-                console.error('插入数据失败:', error);
+                logger.error('插入数据失败:', error);
             }
         }
         return new_url;
     } catch (error) {
-        console.error('API请求失败:', {
+        logger.error('API请求失败:', {
             status: error.response?.status,
             data: error.response?.data,
             message: error.message
@@ -67,10 +69,10 @@ async function main() {
             url = "https://clist.by" + new_url;
             cnt++;
             total++;
-            console.log("已获取:", total, "次");
+            logger.info("已获取:", total, "次");
         }
         catch (error) {
-            console.error('获取失败:', error);
+            logger.error('获取失败:', error);
             break;
         }
     }

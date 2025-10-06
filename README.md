@@ -10,7 +10,7 @@
 
 文件夹 `api` 为后端 `API` 接口，`client` 为前段 js 逻辑，`tools` 为工具文件夹。
 
-`config.json` 为配置文件（暂未使用）。
+`config.json` 为配置文件。
 
 `server.mjs` 为后端入口文件，使用 `koa` 框架，启动 `API` 服务。
 

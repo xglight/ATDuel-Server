@@ -1,5 +1,6 @@
 // user_contest.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function user_contestid(ctx, next) {
     const username = ctx.params.username;
@@ -8,6 +9,7 @@ async function user_contestid(ctx, next) {
         ctx.body = { error: 'username is required' };
         return;
     }
+    logger.info(`user_contestid: 获取用户 ${username} 的比赛 ID`);
     try {
         const [rows, fields] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
 
@@ -22,7 +24,7 @@ async function user_contestid(ctx, next) {
         ctx.status = 200;
         ctx.body = { user_contest };
     } catch (err) {
-        console.log(err);
+        logger.error(`user_contestid: 获取用户 ${username} 的比赛 ID 失败: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

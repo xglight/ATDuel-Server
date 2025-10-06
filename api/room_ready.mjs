@@ -1,5 +1,7 @@
 // room_ready.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
+
 
 async function room_ready(ctx, next) {
     const { room_id, team, position, ready } = ctx.request.body;
@@ -10,6 +12,8 @@ async function room_ready(ctx, next) {
         ctx.body = { success: false, error: '参数不完整' };
         return;
     }
+
+    logger.debug(`room_ready: 更新房间准备状态, 房间 ID ${room_id}, 队伍 ${team}, 位置 ${position}, 准备状态 ${ready}`);
 
     try {
         // 获取房间数据
@@ -30,7 +34,7 @@ async function room_ready(ctx, next) {
             if (!userData.A) userData.A = [];
             if (!userData.B) userData.B = [];
         } catch (e) {
-            console.error('解析user数据失败:', e);
+            logger.error(`room_ready: 解析 user 数据失败: ${e.message}`);
             userData = { A: [], B: [] };
         }
 
@@ -78,7 +82,7 @@ async function room_ready(ctx, next) {
             });
         }
     } catch (err) {
-        console.error(err);
+        logger.error(`room_ready: 更新房间准备状态失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, error: '服务器错误' };
         return;
@@ -94,7 +98,7 @@ function safeParseJSON(jsonStr, defaultValue = {}) {
         }
         return defaultValue;
     } catch (e) {
-        console.error('解析JSON失败:', e);
+        logger.error(`room_ready: 解析JSON失败: ${e.message}`);
         return defaultValue;
     }
 }

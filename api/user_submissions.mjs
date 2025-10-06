@@ -9,6 +9,7 @@ async function getUserSubmission(ctx, next) {
         ctx.body = { error: '参数错误' };
         return;
     }
+    logger.info(`user_submissions: 获取用户 ${username} 对任务 ${task} 的提交记录`);
     if (!status) status = "";
     const contest = task.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
     const url = "https://atcoder.jp/contests/" + contest + "/submissions?f.Task=" + task + "&f.LanguageName=&f.Status=" + status + "&f.User=" + username;
@@ -44,13 +45,13 @@ async function getUserSubmission(ctx, next) {
             ctx.status = 200;
             ctx.body = JSON.stringify(result);
         } catch (e) {
-            console.log(e);
+            logger.error(`user_submissions: 解析 HTML 失败: ${e.message}`);
             ctx.status = 500;
             ctx.body = { error: '服务器错误' };
             return;
         }
     } catch (e) {
-        console.log(e);
+        logger.error(`user_submissions: 获取用户 ${username} 对任务 ${task} 的提交记录失败: ${e.message}`);
         ctx.status = 500;
         ctx.body = { error: '服务器错误' };
         return;

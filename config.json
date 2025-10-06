@@ -20,5 +20,6 @@
         "problemCountLowerLimit": 1,
         "problemCountUpperLimit": 10,
         "timeLimit": 86400
-    }
+    },
+    "logLevel": "info"
 }

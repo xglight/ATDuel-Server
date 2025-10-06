@@ -1,5 +1,6 @@
 // contest_ac.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function contest_ac(ctx, next) {
     try {
@@ -7,9 +8,11 @@ async function contest_ac(ctx, next) {
         const { contestId, username, title } = ctx.request.body;
         if (!contestId || !username || !title) {
             ctx.status = 400;
-            ctx.body = { error: '缺少必要参数' };
+            ctx.body = { error: 'contestId, username, title are required' };
             return;
         }
+
+        logger.debug(`contest_ac: 更新 AC 状态: 比赛 ID ${contestId}, 用户 ${username}, 题目 ${title}`);
 
         // 查询比赛
         const [rows] = await pool.execute(
@@ -24,8 +27,8 @@ async function contest_ac(ctx, next) {
         // 更新题目状态
         const problems = rows[0].problem;
         const user = rows[0].user;
-        const scorea = rows[0].scorea;
-        const scoreb = rows[0].scoreb;
+        let scorea = rows[0].scorea;
+        let scoreb = rows[0].scoreb;
         let updated = false;
 
         for (let i = 0; i < problems.length; i++) {
@@ -66,7 +69,7 @@ async function contest_ac(ctx, next) {
             ctx.body = { success: true, message: 'AC状态更新成功' };
         }
     } catch (err) {
-        console.error('更新AC状态失败:', err);
+        logger.error(`contest_ac: 更新 AC 状态失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = { error: '服务器内部错误' };
     }

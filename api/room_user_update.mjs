@@ -1,5 +1,6 @@
 //room_user_update.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function room_user_update(ctx, next) {
     const { roomId, op, team, username } = ctx.request.body;
@@ -11,6 +12,8 @@ async function room_user_update(ctx, next) {
         ctx.body = { success: false, error: '参数不完整' };
         return;
     }
+
+    logger.debug(`room_user_update: 更新房间用户, 房间 ID ${roomId}, 操作 ${op}, 队伍 ${team}, 用户名 ${username}, 位置 ${pos}`);
 
     const conn = await pool.getConnection();
     try {
@@ -39,14 +42,14 @@ async function room_user_update(ctx, next) {
                 ? JSON.parse(room.setting)
                 : room.setting || {};
         } catch (e) {
-            console.error('解析setting失败:', room.setting, e);
+            logger.error(`room_user_update: 解析setting失败: ${room.setting}, ${e.message}`);
             setting = {};
         }
 
         // 设置默认模式为1v1
         if (!setting.mode || !setting.mode.includes('V')) {
             setting.mode = '1V1';
-            console.warn('使用默认房间模式: 1V1');
+            logger.warn('room_user_update: 使用默认房间模式: 1V1');
         }
 
         const mode = setting.mode.split('V');
@@ -124,12 +127,12 @@ async function room_user_update(ctx, next) {
             userData: userData
         };
     } catch (err) {
-        console.log(err);
+        logger.error(`room_user_update: 更新房间用户失败: ${err.message}`);
         if (conn) {
             try {
                 await conn.rollback();
             } catch (rollbackErr) {
-                console.error('事务回滚失败:', rollbackErr);
+                logger.error(`room_user_update: 事务回滚失败: ${rollbackErr.message}`);
             }
             conn.release();
         }

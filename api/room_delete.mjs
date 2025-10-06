@@ -1,6 +1,8 @@
 // room_delete.mjs
 
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
+
 
 async function delete_room(ctx, next) {
     const { room_id } = ctx.request.body;
@@ -10,11 +12,12 @@ async function delete_room(ctx, next) {
         ctx.body = { success: false, error: 'room_id is required' };
         return;
     }
+    logger.debug(`room_delete: 删除房间, 房间 ID ${room_id}`);
 
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        
+
         // 先获取房间信息用于广播
         const [roomRows] = await conn.query('SELECT * FROM rooms WHERE url =?', [room_id]);
         if (roomRows.length === 0) {
@@ -37,7 +40,7 @@ async function delete_room(ctx, next) {
 
         ctx.body = { success: true };
     } catch (err) {
-        console.error(err);
+        logger.error(`room_delete: 删除房间失败: ${err.message}`);
         if (conn) await conn.rollback();
         ctx.status = 500;
         ctx.body = { success: false, error: '服务器错误' };

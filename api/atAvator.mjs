@@ -1,6 +1,7 @@
 // atavatar.mjs
 import * as cheerio from 'cheerio';
 import https from 'https';
+import logger from '../logger.mjs';
 
 async function atavatar(ctx, next) {
     const username = ctx.params.username;
@@ -10,6 +11,8 @@ async function atavatar(ctx, next) {
         return;
     }
     const url = 'https://atcoder.jp/users/' + username;
+
+    logger.debug('atavatar: 请求头像: ', url);
 
     ctx.type = 'text/plain';
 
@@ -24,7 +27,7 @@ async function atavatar(ctx, next) {
                     resolve(data);
                 });
             }).on('error', (error) => {
-                console.log(error);
+                logger.error('atavatar: 网络错误: ', error);
                 reject(error);
             });
         });
@@ -41,7 +44,7 @@ async function atavatar(ctx, next) {
             ctx.body = img;
         }
     } catch (error) {
-        console.log(error);
+        logger.error('atavatar: 处理出错: ', error);
         ctx.status = 500;
         ctx.body = 'Server Error';
     }

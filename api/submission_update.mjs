@@ -60,6 +60,9 @@ async function submission_update(ctx, next) {
             ctx.body = { success: false, message: '比赛不存在' };
             return;
         }
+
+        logger.info(`submission_update: 更新提交记录: ${problemName}`);
+
         let subdata = contest[0].submission || [];
 
         startTime = contest[0].startTime;
@@ -81,7 +84,7 @@ async function submission_update(ctx, next) {
         ctx.status = 200;
         ctx.body = { success: true, message: '提交记录更新成功' };
     } catch (error) {
-        console.error('提交记录更新失败:', error);
+        logger.error(`submission_update: 更新提交记录失败: ${error.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: '提交记录更新失败' };
     }

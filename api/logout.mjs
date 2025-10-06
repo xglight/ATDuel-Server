@@ -1,17 +1,20 @@
 // logout.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function logout(ctx, next) {
     const { username, token } = ctx.request.body;
 
     if (!username || !token) {
-        console.log('logout: 用户名或 Token 为空');
         ctx.status = 400;
         ctx.body = {
             message: '用户名或token不能为空'
         };
         return;
     }
+
+    logger.debug(`logout: 用户 ${username} 登出`);
+
     try {
         const [rows] = await pool.execute('DELETE FROM login_status WHERE username=? AND token=?', [username, token]);
         if (rows.affectedRows === 0) {
@@ -25,7 +28,7 @@ async function logout(ctx, next) {
         ctx.type = 'text/plain';
         ctx.body = '登出成功';
     } catch (err) {
-        console.error(err);
+        logger.error(`logout: 登出失败: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

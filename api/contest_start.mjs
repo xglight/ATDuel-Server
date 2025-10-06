@@ -10,6 +10,9 @@ async function contest_start(ctx, next) {
         ctx.body = { success: false, error: '参数错误' };
         return;
     }
+
+    logger.debug(`contest_start: 开始比赛: 房间 ID ${room_id}`);
+
     try {
         const [row] = await pool.execute('SELECT * FROM rooms WHERE url =?', [room_id]);
         if (row.length === 0) {
@@ -68,7 +71,7 @@ async function contest_start(ctx, next) {
                         return false; // Don't retry for client-side errors
                     }
                 } catch (error) {
-                    console.error(`Attempt ${i + 1} failed for ${username} on ${task}:`, error.message);
+                    logger.error(`Attempt ${i + 1} failed for ${username} on ${task}: ${error.message}`);
                     if (i === 2) return false; // Return false after the last attempt
                     await new Promise(res => setTimeout(res, 1000 * (i + 1))); // Exponential backoff
                 }
@@ -138,7 +141,7 @@ async function contest_start(ctx, next) {
             problemList: JSON.stringify(problemList),
             rated: rated
         });
-        console.log(`比赛开始: ${contestData}`);
+        logger.info(`contest_start: 比赛开始: ${url}`);
         await pool.execute('INSERT INTO contest (url, startTime, user, problem, status, rated) VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user = VALUES(user), problem = VALUES(problem), status = VALUES(status), rated = VALUES(rated)', [url, JSON.stringify(user), JSON.stringify(problemList), 0, rated]);
         // 删除房间
         await pool.execute('DELETE FROM rooms WHERE url = ?', [url]);
@@ -161,7 +164,7 @@ async function contest_start(ctx, next) {
         ctx.status = 200;
         ctx.body = { success: true, data: contestData };
     } catch (err) {
-        console.log(err);
+        logger.error(`contest_start: 开始比赛失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, error: '服务器错误' };
         return;

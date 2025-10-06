@@ -1,5 +1,6 @@
 // check_login.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function check_login(ctx, next) {
     const { username, token } = ctx.request.body;
@@ -8,6 +9,7 @@ async function check_login(ctx, next) {
         ctx.body = { success: false, message: 'username or token can not be empty' };
         return;
     }
+    logger.debug('check_login: 请求检查登录: ', username, token);
 
     try {
         const [rows] = await pool.execute(
@@ -16,7 +18,7 @@ async function check_login(ctx, next) {
         );
 
         if (rows.length === 0) {
-            console.log('check_login: 用户', username, '未登录');
+            logger.debug('check_login: 用户 ', username, ' 未登录');
             ctx.status = 401;
             ctx.body = { success: false, message: 'user not login' };
             return;
@@ -28,7 +30,6 @@ async function check_login(ctx, next) {
         const expireTime = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 
         if (now - loginTime.getTime() < expireTime) {
-            // console.log('check_login: 用户', username, '登录成功');
             await pool.execute(
                 'UPDATE login_status SET loginTime = CURRENT_TIMESTAMP WHERE username = ? AND token = ?',
                 [username, token]
@@ -39,12 +40,12 @@ async function check_login(ctx, next) {
                 'DELETE FROM login_status WHERE username = ? AND token = ?',
                 [username, token]
             );
-            console.log('check_login: 用户', username, '登录过期');
+            logger.debug('check_login: 用户 ', username, ' 登录过期');
             ctx.status = 401;
             ctx.body = { success: false, message: 'login expired' };
         }
     } catch (error) {
-        console.error('check_login: 查询出错:', error);
+        logger.error('check_login: 查询出错: ', error);
         ctx.status = 500;
         ctx.type = 'text/json';
         ctx.body = { success: false, message: 'Server Error' };

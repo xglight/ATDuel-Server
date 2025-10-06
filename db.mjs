@@ -1,28 +1,29 @@
 import mysql from 'mysql2/promise';
-import fs from 'fs';
+import config from './config.mjs'
+import logger from './logger.mjs';
 
 let pool;
 
 async function init() {
     try {
         pool = mysql.createPool({
-            host: `10.0.3.113`,
-            port: `3306`,
-            user: `root`,
-            password: `atduel`,
-            database: `atduel`,
+            host: config.mysql.host,
+            port: config.mysql.port,
+            user: config.mysql.user,
+            password: config.mysql.password,
+            database: config.mysql.database,
             waitForConnections: true,
             connectionLimit: 1024, // 允许最大连接数
             queueLimit: 0
         });
 
-        console.log('db: 数据库连接池已创建');
+        logger.info('db: 数据库连接池已创建');
 
         // 查询数据库是否存在
         let [databases] = await pool.execute('SHOW DATABASES');
         if (!databases.some(item => item['Database']?.toLowerCase() === 'atduel')) {
             await pool.execute('CREATE DATABASE atduel');
-            console.log("db: 成功创建数据库");
+            logger.info("db: 成功创建数据库");
         }
 
         // 查询表是否存在
@@ -95,16 +96,16 @@ async function init() {
         for (const [tableName, createSQL] of Object.entries(tableDefinitions)) {
             if (!tableNames.includes(tableName)) {
                 await pool.execute(createSQL);
-                console.log(`db: 成功创建表 ${tableName}`);
+                logger.info(`db: 成功创建表 ${tableName}`);
             } else {
-                console.log(`db: 表 ${tableName} 已存在`);
+                logger.debug(`db: 表 ${tableName} 已存在`);
             }
         }
 
-        console.log('db: 数据库初始化完成');
+        logger.info('db: 数据库初始化完成');
         return pool; // 返回连接池对象
     } catch (err) {
-        console.error('db: 数据库初始化失败:', err.stack);
+        logger.error('db: 数据库初始化失败:', err.stack);
         return null;
     }
 }

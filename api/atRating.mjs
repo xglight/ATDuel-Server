@@ -1,6 +1,7 @@
 // atRating.mjs
 import * as cheerio from 'cheerio';
 import https from 'https';
+import logger from '../logger.mjs';
 
 async function atRating(ctx, next) {
     const username = ctx.params.username;
@@ -10,9 +11,8 @@ async function atRating(ctx, next) {
         ctx.body = "username is required";
         return;
     }
-    // console.log('rating-username:', username);
     const url = 'https://atcoder.jp/users/' + username;
-
+    logger.debug('atRating: 请求ATRating: ', url);
     try {
         const data = await new Promise((resolve, reject) => {
             https.get(url, (res) => {
@@ -24,7 +24,7 @@ async function atRating(ctx, next) {
                     resolve(data);
                 });
             }).on('error', (error) => {
-                console.log(error);
+                logger.error('atRating: 网络错误: ', error);
                 reject(error);
             });
         });
@@ -48,7 +48,7 @@ async function atRating(ctx, next) {
             ctx.body = rating;
         }
     } catch (error) {
-        console.log(error);
+        logger.error('atRating: 处理出错: ', error);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

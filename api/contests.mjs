@@ -1,9 +1,12 @@
 // contests.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
+
 
 async function contests(ctx, next) {
     try {
         const [rows, fields] = await pool.query('SELECT * FROM contest');
+        logger.debug(`contests: 查询所有比赛: 共 ${rows.length} 条记录`);
         rows.sort((a, b) => {
             if (a.status < b.status) {
                 return -1;
@@ -44,12 +47,12 @@ async function contests(ctx, next) {
         }
         try {
             result = JSON.stringify(result);
-        } catch (e) { console.log(e) }
+        } catch (e) { logger.error(`contests: 解析 JSON 失败: ${e.message}`) }
         ctx.type = 'text/json';
         ctx.status = 200;
         ctx.body = result;
     } catch (err) {
-        console.error(err);
+        logger.error(`contests: 查询所有比赛失败: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

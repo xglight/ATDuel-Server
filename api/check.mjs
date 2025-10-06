@@ -1,11 +1,22 @@
 // check.mjs
 import * as cheerio from 'cheerio';
 import https from 'https';
+import logger from '../logger.mjs';
+
+
 
 async function check(ctx, next) {
     const username = ctx.params.username;
-    console.log('check-username:', username);
+
+    if (!username) {
+        ctx.status = 400;
+        ctx.body = 'username is required';
+        return;
+    }
+
     const url = 'https://atcoder.jp/users/' + username;
+
+    logger.debug('check: 注册 token 检查: ', username);
 
     ctx.type = 'text/plain';
     try {
@@ -19,7 +30,7 @@ async function check(ctx, next) {
                     resolve(data);
                 });
             }).on('error', (error) => {
-                console.log(error);
+                logger.error('check: ', error);
                 reject(error);
             });
         });
@@ -41,7 +52,7 @@ async function check(ctx, next) {
             ctx.body = affiliation;
         }
     } catch (error) {
-        console.log(error);
+        logger.error('check: ', error);
         ctx.status = 500;
         ctx.body = 'Server Error';
     }

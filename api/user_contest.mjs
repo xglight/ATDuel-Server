@@ -1,6 +1,7 @@
 // user_contest.mjs
 import pool from '../db.mjs';
 import config from '../config.mjs';
+import logger from '../logger.mjs';
 
 async function user_contest(ctx, next) {
     const username = ctx.params.username;
@@ -9,6 +10,8 @@ async function user_contest(ctx, next) {
         ctx.body = { error: 'username is required' };
         return;
     }
+
+    logger.info(`user_contest: 获取用户 ${username} 的比赛记录`);
     try {
         const contestid = await fetch(config.buildApiUrl(`/user_contestid/${username}`), { method: 'GET' }).then(response => response.json());
         if (contestid.user_contest == null) {
@@ -44,7 +47,7 @@ async function user_contest(ctx, next) {
                     status: status
                 });
             } catch (err) {
-                console.log(err);
+                logger.error(`user_contest: JSON 解析失败: ${err.message}`);
                 ctx.status = 500;
                 ctx.type = 'text/plain';
                 ctx.body = 'Server Error';
@@ -55,7 +58,7 @@ async function user_contest(ctx, next) {
         ctx.type = 'text/json';
         ctx.body = data;
     } catch (err) {
-        console.log(err);
+        logger.error(`user_contest: 获取用户 ${username} 的比赛记录失败: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

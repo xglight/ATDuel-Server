@@ -12,6 +12,8 @@ async function register(ctx, next) {
         return;
     }
 
+    logger.debug(`register: 注册用户 ${username}`);
+
     try {
         const [rows] = await pool.execute('SELECT * FROM user WHERE username = ?', [username]);
         if (rows.length > 0) {
@@ -27,7 +29,7 @@ async function register(ctx, next) {
             const ratingText = await fetch(config.buildApiUrl(`/atRating/${ATName}`)).then(res => res.text());
             rating = parseInt(ratingText) || 0;
         } catch (err) {
-            console.error('register: 获取 rating 失败:', err.message);
+            logger.error('register: 获取 rating 失败:', err.message);
         }
 
         if (rating < config.register.ratingLowerLimit) {
@@ -39,7 +41,7 @@ async function register(ctx, next) {
         try {
             avatar = await fetch(config.buildApiUrl(`/atavatar/${ATName}`)).then(res => res.text());
         } catch (err) {
-            console.error('register: 获取 avatar 失败:', err.message);
+            logger.error('register: 获取 avatar 失败:', err.message);
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -49,11 +51,12 @@ async function register(ctx, next) {
             [username, hashedPassword, ATName, rating, avatar]
         );
 
-        console.log('register: 用户', username, '注册成功');
+        logger.info(`register: 用户 ${username} 注册成功`);
+
         ctx.body = { success: true, message: 'register success' };
         ctx.type = 'text/json';
     } catch (err) {
-        console.error('register: username:', username, '查询/插入出错:', err.stack);
+        logger.error(`register: 用户 ${username} 注册失败: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/json';
         ctx.body = { success: false, message: 'Server Error' };

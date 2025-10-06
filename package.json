@@ -1,4 +1,13 @@
 {
+  "name": "atduel-server",
+  "version": "1.0.0",
+  "description": "ATDuel server",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "nodemon server.mjs"
+  },
   "dependencies": {
     "@koa/bodyparser": "^5.1.1",
     "@koa/cors": "^5.0.0",
@@ -13,5 +22,8 @@
     "mysql2": "^3.12.0",
     "uuid": "^11.1.0",
     "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   }
 }

@@ -1,6 +1,8 @@
 // room_create.mjs
 
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
+
 
 function randomString(length) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -22,6 +24,9 @@ async function createRoom(ctx, next) {
             ctx.body = { success: false, message: '缺少必要参数' };
             return;
         }
+
+        logger.debug(`room_create: 创建房间, 主用户 ${body.username}`);
+
         const roomUrl = randomString(20);
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -47,7 +52,7 @@ async function createRoom(ctx, next) {
             [roomData]
         );
 
-        console.log('创建房间成功:', roomData);
+        logger.info(`room_create: 创建房间成功, 房间 URL ${roomUrl}`);
         // 返回成功响应
         ctx.status = 200;
         ctx.body = {
@@ -56,7 +61,7 @@ async function createRoom(ctx, next) {
         };
 
     } catch (err) {
-        console.error('创建房间错误:', err);
+        logger.error(`room_create: 创建房间失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = {
             success: false,

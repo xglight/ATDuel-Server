@@ -1,6 +1,7 @@
 // submission.mjs
 
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function submission(ctx, next) {
     const { contestId } = ctx.params;
@@ -17,6 +18,7 @@ async function submission(ctx, next) {
         ctx.body = { error: '没有找到该比赛' };
         return;
     }
+    logger.info(`submission: 获取提交记录: ${contestId}`);
     try {
         if (rows[0].submission == null) {
             ctx.status = 200;
@@ -35,7 +37,7 @@ async function submission(ctx, next) {
         ctx.status = 200;
         ctx.body = { data, total };
     } catch (err) {
-        console.error('解析submission数据失败:', err);
+        logger.error(`submission: 获取提交记录失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = [];
     }

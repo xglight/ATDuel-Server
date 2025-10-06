@@ -3,6 +3,7 @@ import Koa from 'koa';
 import bodyParser from '@koa/bodyparser';
 import cors from '@koa/cors';
 import apiControl from './import_api.mjs';
+import logger from './logger.mjs';
 import { WebSocketServer } from 'ws';
 
 const app = new Koa();
@@ -83,13 +84,14 @@ async function main() {
 
     // 错误处理
     app.on('error', (err, ctx) => {
-        console.error('Server error:', err);
+        logger.fatal('Server error:', err);
     });
 
     const server = app.listen(port, () => {
-        console.log(`server: 服务器运行在 http://localhost:${port}`);
+        logger.info(`server: 服务器运行在 http://localhost:${port}`);
     }).on('error', err => {
-        console.error('server: 服务器启动出错:', err.stack);
+        logger.fatal('server: 服务器启动出错: ', err.stack);
+        process.exit(1);
     });
 
     // 监听广播事件
@@ -121,6 +123,7 @@ async function main() {
                         roomClients.set(roomId, new Set());
                     }
                     roomClients.get(roomId).add(ws);
+                    logger.debug(`ws: 客户端 ${ws._socket.remoteAddress} 加入房间 ${roomId}`);
                     ws.roomId = roomId;
                 }
                 else if (data.type === 'join_contest' && data.contestId) {
@@ -131,7 +134,7 @@ async function main() {
                     }
                     contestClients.get(contestId).add(ws);
                     ws.contestId = contestId;
-
+                    logger.debug(`ws: 客户端 ${ws._socket.remoteAddress} 加入比赛 ${contestId}`);
                     ws.teamId = data.teamId; // 保存队伍ID
 
                     // 发送历史消息
@@ -141,7 +144,6 @@ async function main() {
                         const filteredHistory = history.filter(msg =>
                             msg.mode == 'all' || msg.teamId === data.teamId
                         );
-
                         if (Array.isArray(filteredHistory)) {
                             filteredHistory.forEach(msg => {
                                 ws.send(JSON.stringify({
@@ -155,15 +157,15 @@ async function main() {
                             });
                         }
                     } catch (error) {
-                        console.error('获取历史消息失败:', error);
+                        logger.error('ws: 获取历史消息失败: ', error);
                     }
                 } else if (data.type === 'chat_message') {
                     // 输入验证
                     if (!data.contestId || !data.sender || !data.message || !data.mode) {
-                        console.error('无效的聊天消息:', data);
+                        logger.warn('ws: 无效的聊天消息: ', data);
                         return;
                     }
-
+                    logger.debug(`ws: 收到聊天消息: ${data.message} 用户: ${data.sender} 模式: ${data.mode}`);
                     try {
                         // 存储消息
                         await storeMessage(
@@ -175,7 +177,7 @@ async function main() {
                             data.mode
                         );
                     } catch (error) {
-                        console.error('存储消息失败');
+                        logger.error('ws: 存储消息失败: ', error);
                     }
 
                     if (data.mode === 'all') {
@@ -207,7 +209,7 @@ async function main() {
                     }
                 }
             } catch (error) {
-                console.error('WebSocket消息出错');
+                logger.error('ws: WebSocket 消息出错: ', error);
             }
         });
 
@@ -235,17 +237,17 @@ async function main() {
 
     // 监听进程关闭信号
     process.on('SIGINT', async () => {
-        console.log('server: 服务器正在关闭...');
+        logger.info('server: 服务器正在关闭...');
         try {
-            server.close(() => console.log('server: Koa 服务器已关闭'));
+            server.close(() => logger.info('server: Koa 服务器已关闭'));
             if (pool) {
                 await pool.end();
-                console.log('server: 数据库连接池已关闭');
+                logger.info('server: 数据库连接池已关闭');
             }
         } catch (err) {
-            console.error('server: 关闭资源时出错:', err.stack);
+            logger.fatal('server: 关闭资源时出错: ', err.stack);
         } finally {
-            console.log('server: 服务器已关闭');
+            logger.info('server: 服务器已关闭');
             process.exit(0);
         }
     });

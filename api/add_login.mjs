@@ -1,5 +1,6 @@
 //add_login.mjs
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function add_login(ctx, next) {
     const { username, token } = ctx.request.body;
@@ -10,6 +11,7 @@ async function add_login(ctx, next) {
         return;
     }
     ctx.type = 'text/json';
+    logger.debug('add_login: 收到登录状态更新请求: ', username, token);
     try {
         const rememberMe = ctx.request.body.rememberMe || 0;
         await pool.execute(
@@ -19,11 +21,11 @@ async function add_login(ctx, next) {
             [username, token, rememberMe]
         );
 
-        console.log('add_login: 用户', username, '登录信息已添加或更新');
+        logger.debug('add_login: 用户 ', username, '，登录信息已添加或更新');
         ctx.status = 200;
         ctx.body = { success: true, message: 'add login success' };
     } catch (error) {
-        console.error('add_login: 处理出错:', error);
+        logger.error('add_login: 处理出错: ', error);
         ctx.status = 500;
         ctx.body = { success: false, message: 'Server Error' };
     }

@@ -1,6 +1,7 @@
 // atName.mjs
 
 import pool from '../db.mjs';
+import logger from '../logger.mjs';
 
 async function atname(ctx, next) {
     const username = ctx.params.username;
@@ -10,6 +11,8 @@ async function atname(ctx, next) {
         ctx.body = { message: 'Username is required' };
         return;
     }
+
+    logger.debug('atname: 请求ATName: ', username);
 
     try {
         const [result] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
@@ -22,7 +25,7 @@ async function atname(ctx, next) {
             ctx.body = result[0].ATName;
         }
     } catch (err) {
-        console.error(err);
+        logger.error('atname: 处理出错: ', err);
         ctx.status = 500;
         ctx.body = { message: 'Internal server error' };
     }
