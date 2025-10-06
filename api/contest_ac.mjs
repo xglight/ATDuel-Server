@@ -12,17 +12,17 @@ async function contest_ac(ctx, next) {
             return;
         }
 
-        logger.debug(`contest_ac: 更新 AC 状态: 比赛 ID ${contestId}, 用户 ${username}, 题目 ${title}`);
-
         // 查询比赛
         const [rows] = await pool.execute(
             'SELECT * FROM contest WHERE url = ?', [contestId]
         );
         if (rows.length === 0) {
             ctx.status = 404;
-            ctx.body = { error: '比赛不存在' };
+            ctx.body = { error: 'Not Found' };
             return;
         }
+
+        logger.debug(`contest_ac: 更新 AC 状态: 比赛 ID ${contestId}, 用户 ${username}, 题目 ${title}`);
 
         // 更新题目状态
         const problems = rows[0].problem;

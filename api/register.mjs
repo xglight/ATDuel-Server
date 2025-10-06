@@ -22,6 +22,13 @@ async function register(ctx, next) {
             return;
         }
 
+        const [atnameRows] = await pool.execute('SELECT * FROM user WHERE ATName = ?', [ATName]);
+        if (atnameRows.length > 0) {
+            ctx.status = 400;
+            ctx.body = { success: false, message: 'atcoder name already exists' };
+            return;
+        }
+
         let rating = 0;
         let avatar = '';
 
