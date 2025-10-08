@@ -18,10 +18,21 @@ async function check_login(ctx, next) {
         );
 
         if (rows.length === 0) {
-            logger.debug('check_login: 用户 ', username, ' 未登录');
             ctx.status = 401;
             ctx.body = { success: false, message: 'user not login' };
             return;
+        }
+
+        const [rowsBan] = await pool.execute('SELECT * FROM user_ban WHERE username = ?', [username]);
+        if (rowsBan.length > 0) {
+            rowsBan.sort((a, b) => new Date(b.endBanTime) - new Date(a.endBanTime));
+            for (const ban of rowsBan) {
+                if (new Date(ban.endBanTime) > new Date()) {
+                    ctx.status = 403;
+                    ctx.body = { success: false, message: '你已被禁止登录，直到 ' + ban.endBanTime };
+                    return;
+                }
+            }
         }
 
         const loginTime = new Date(rows[0].loginTime);

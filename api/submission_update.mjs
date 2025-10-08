@@ -2,6 +2,7 @@
 
 import pool from '../db.mjs';
 import config from '../config.mjs';
+import logger from '../logger.mjs';
 
 async function processTeamSubmissions(team, problemName, subdata) {
     for (const member of team) {

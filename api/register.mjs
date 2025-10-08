@@ -2,6 +2,7 @@
 import pool from '../db.mjs';
 import bcrypt from 'bcrypt';
 import config from '../config.mjs';
+import logger from '../logger.mjs';
 
 async function register(ctx, next) {
     const { username, password, ATName } = ctx.request.body;

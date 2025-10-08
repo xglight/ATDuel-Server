@@ -17,7 +17,7 @@ async function room_ready(ctx, next) {
 
     try {
         // 获取房间数据
-        const [roomRows] = await pool.query('SELECT * FROM rooms WHERE url = ?', [room_id]);
+        const [roomRows] = await pool.query('SELECT * FROM room WHERE url = ?', [room_id]);
         if (roomRows.length === 0) {
             ctx.status = 404;
             ctx.body = { success: false, error: '房间不存在' };
@@ -54,13 +54,13 @@ async function room_ready(ctx, next) {
 
         // 更新数据库
         await pool.query(
-            'UPDATE rooms SET user = ? WHERE url = ?',
+            'UPDATE room SET user = ? WHERE url = ?',
             [JSON.stringify(userData), room_id]
         );
 
         // 获取更新后的完整房间数据
         const [updatedRoom] = await pool.query(
-            'SELECT * FROM rooms WHERE url = ?',
+            'SELECT * FROM room WHERE url = ?',
             [room_id]
         );
 

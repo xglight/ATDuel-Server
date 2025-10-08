@@ -32,7 +32,7 @@ async function init() {
 
         const tableDefinitions = {
             user: `
-                CREATE TABLE user (
+                CREATE TABLE IF NOT EXISTS user (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(255) NOT NULL UNIQUE,
                     password VARCHAR(255) NOT NULL,
@@ -42,14 +42,14 @@ async function init() {
                     contest JSON
                 )`,
             problem: `
-                CREATE TABLE problem (
+                CREATE TABLE IF NOT EXISTS problem (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     title VARCHAR(255) NOT NULL,
                     url VARCHAR(255) NOT NULL,
                     difficulty INT NOT NULL
                 )`,
             contest: `
-                CREATE TABLE contest (
+                CREATE TABLE IF NOT EXISTS contest (
                     id INT PRIMARY KEY,
                     url VARCHAR(255) NOT NULL,
                     startTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -64,15 +64,15 @@ async function init() {
                     rated BOOLEAN DEFAULT false
                 )`,
             login_status: `
-                CREATE TABLE login_status (
+                CREATE TABLE IF NOT EXISTS login_status (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(255) NOT NULL,
                     token VARCHAR(255) NOT NULL,
                     loginTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     rememberMe TINYINT DEFAULT 0
                 )`,
-            rooms: `
-                CREATE TABLE rooms (
+            room: `
+                CREATE TABLE IF NOT EXISTS room (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     url VARCHAR(255) NOT NULL,
                     master VARCHAR(255) NOT NULL,
@@ -81,16 +81,39 @@ async function init() {
                     rated BOOLEAN DEFAULT false,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )`,
-            chat_messages: `
-                CREATE TABLE IF NOT EXISTS chat_messages (
+            contest_messages: `
+                CREATE TABLE IF NOT EXISTS contest_messages (
                     id SERIAL PRIMARY KEY,
+                    type VARCHAR(30) NOT NULL,
                     contest_id VARCHAR(50) NOT NULL,
                     team_id VARCHAR(50),
                     sender VARCHAR(50) NOT NULL,
                     message TEXT NOT NULL,
                     mode VARCHAR(10) NOT NULL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )`
+                )`,
+            user_ban: `
+                CREATE TABLE IF NOT EXISTS user_ban (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    startBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    endBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reason TEXT
+                )`,
+            ip_ban: `
+                CREATE TABLE IF NOT EXISTS ip_ban (
+                    id SERIAL PRIMARY KEY,
+                    ip VARCHAR(255) NOT NULL,
+                    startBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    endBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reason TEXT
+                )`,
+            admin_status: `
+                CREATE TABLE IF NOT EXISTS admin_status (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    token VARCHAR(255) NOT NULL,
+                    loginTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )`,
         };
 
         for (const [tableName, createSQL] of Object.entries(tableDefinitions)) {

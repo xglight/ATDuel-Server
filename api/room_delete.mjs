@@ -19,7 +19,7 @@ async function delete_room(ctx, next) {
         await conn.beginTransaction();
 
         // 先获取房间信息用于广播
-        const [roomRows] = await conn.query('SELECT * FROM rooms WHERE url =?', [room_id]);
+        const [roomRows] = await conn.query('SELECT * FROM  WHERE url =?', [room_id]);
         if (roomRows.length === 0) {
             ctx.status = 404;
             ctx.body = { success: false, error: '房间不存在' };
@@ -28,7 +28,7 @@ async function delete_room(ctx, next) {
         }
 
         // 删除房间
-        await conn.execute('DELETE FROM rooms WHERE url =?', [room_id]);
+        await conn.execute('DELETE FROM room WHERE url =?', [room_id]);
         await conn.commit();
 
         // 广播房间删除通知

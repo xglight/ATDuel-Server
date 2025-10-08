@@ -50,6 +50,7 @@ async function contest_final(ctx, next) {
 
         ctx.status = 200;
         ctx.body = {
+            success: true,
             message: 'contest finalized'
         };
     } catch (err) {
@@ -59,6 +60,7 @@ async function contest_final(ctx, next) {
         }
         ctx.status = 500;
         ctx.body = {
+            success: false,
             message: 'Internal server error'
         };
     } finally {

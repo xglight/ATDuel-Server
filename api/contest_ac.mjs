@@ -16,6 +16,7 @@ async function contest_ac(ctx, next) {
         const [rows] = await pool.execute(
             'SELECT * FROM contest WHERE url = ?', [contestId]
         );
+
         if (rows.length === 0) {
             ctx.status = 404;
             ctx.body = { error: 'Not Found' };

@@ -6,7 +6,7 @@ import logger from '../logger.mjs';
 async function room(ctx, next) {
     try {
         const id = ctx.params.id;
-        const [rows, fields] = await pool.query(`SELECT * FROM rooms WHERE url =?`, [id]);
+        const [rows, fields] = await pool.query(`SELECT * FROM room WHERE url =?`, [id]);
 
         if (rows.length === 0) {
             ctx.status = 404;

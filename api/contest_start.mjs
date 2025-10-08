@@ -14,7 +14,7 @@ async function contest_start(ctx, next) {
     logger.debug(`contest_start: 开始比赛: 房间 ID ${room_id}`);
 
     try {
-        const [row] = await pool.execute('SELECT * FROM rooms WHERE url =?', [room_id]);
+        const [row] = await pool.execute('SELECT * FROM room WHERE url =?', [room_id]);
         if (row.length === 0) {
             ctx.status = 404;
             ctx.body = { success: false, error: '房间不存在' };
@@ -144,7 +144,7 @@ async function contest_start(ctx, next) {
         logger.info(`contest_start: 比赛开始: ${url}`);
         await pool.execute('INSERT INTO contest (url, startTime, user, problem, status, rated) VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user = VALUES(user), problem = VALUES(problem), status = VALUES(status), rated = VALUES(rated)', [url, JSON.stringify(user), JSON.stringify(problemList), 0, rated]);
         // 删除房间
-        await pool.execute('DELETE FROM rooms WHERE url = ?', [url]);
+        await pool.execute('DELETE FROM room WHERE url = ?', [url]);
         const now = Date.now();
         // 广播比赛开始通知
         ctx.app.emit('broadcast', {

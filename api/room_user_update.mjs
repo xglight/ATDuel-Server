@@ -21,7 +21,7 @@ async function room_user_update(ctx, next) {
 
         // 获取房间信息和锁
         const [rows] = await conn.query(
-            `SELECT * FROM rooms WHERE url = ? FOR UPDATE`,
+            `SELECT * FROM room WHERE url = ? FOR UPDATE`,
             [roomId]
         );
 
@@ -96,13 +96,13 @@ async function room_user_update(ctx, next) {
 
         // 更新数据库
         await conn.query(
-            `UPDATE rooms SET user = ?, last_updated = NOW() WHERE url = ?`,
+            `UPDATE room SET user = ?, last_updated = NOW() WHERE url = ?`,
             [JSON.stringify(userData), roomId]
         );
 
         // 获取更新后的房间信息
         const [updatedRoom] = await conn.query(
-            `SELECT * FROM rooms WHERE url = ?`,
+            `SELECT * FROM room WHERE url = ?`,
             [roomId]
         );
 

@@ -48,7 +48,7 @@ async function createRoom(ctx, next) {
 
         // 插入数据库
         await pool.query(
-            'INSERT INTO rooms SET ?',
+            'INSERT INTO room SET ?',
             [roomData]
         );
 

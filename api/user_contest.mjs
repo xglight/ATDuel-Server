@@ -39,8 +39,8 @@ async function user_contest(ctx, next) {
                 const status = rows[0].status;
                 data.push({
                     id: id,
-                    starttime: starttime,
-                    endtime: endtime,
+                    startTime: starttime,
+                    endTime: endtime,
                     user,
                     rating,
                     problem,

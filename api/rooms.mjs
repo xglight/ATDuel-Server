@@ -5,7 +5,7 @@ import logger from '../logger.mjs';
 
 async function rooms(ctx, next) {
     try {
-        const [rows, fields] = await pool.query('SELECT * FROM rooms');
+        const [rows, fields] = await pool.query('SELECT * FROM room');
         logger.info(`rooms: 获取房间列表: ${rows.length} 个房间`);
         let result = [];
 

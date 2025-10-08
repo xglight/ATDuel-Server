@@ -1,5 +1,6 @@
 // user_submissions.mjs
 import * as cheerio from 'cheerio';
+import logger from '../logger.mjs';
 
 async function getUserSubmission(ctx, next) {
     const { username, task } = ctx.request.body;
@@ -9,7 +10,7 @@ async function getUserSubmission(ctx, next) {
         ctx.body = { error: '参数错误' };
         return;
     }
-    logger.info(`user_submissions: 获取用户 ${username} 对任务 ${task} 的提交记录`);
+    logger.debug(`user_submissions: 获取用户 ${username} 对任务 ${task} 的提交记录`);
     if (!status) status = "";
     const contest = task.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
     const url = "https://atcoder.jp/contests/" + contest + "/submissions?f.Task=" + task + "&f.LanguageName=&f.Status=" + status + "&f.User=" + username;

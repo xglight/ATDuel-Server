@@ -56,11 +56,13 @@ const CONTENT_CONFIG = configData.content;
  */
 const LOG_LEVEL = configData.logLevel;
 
+const ADMIN_PASSWORD = configData.adminPassword;
 export default {
     server: SERVER_CONFIG,
     mysql: MYSQL_CONFIG,
     register: REGISTER_CONFIG,
     content: CONTENT_CONFIG,
     logLevel: LOG_LEVEL,
+    adminPassword: ADMIN_PASSWORD,
     buildApiUrl
 };

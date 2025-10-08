@@ -21,5 +21,6 @@
         "problemCountUpperLimit": 10,
         "timeLimit": 86400
     },
-    "logLevel": "debug"
+    "logLevel": "debug",
+    "adminPassword": "$2b$10$v.9DO/qz83pwYSp56v8Se.WXXpQ1uJAEOkFIRL8jzZiXdtN5wF5tC"
 }

@@ -3,8 +3,6 @@ import * as cheerio from 'cheerio';
 import https from 'https';
 import logger from '../logger.mjs';
 
-
-
 async function check(ctx, next) {
     const username = ctx.params.username;
 

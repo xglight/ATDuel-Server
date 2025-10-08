@@ -22,10 +22,10 @@ async function contests(ctx, next) {
             const row = rows[i];
             const id = row.id;
             const url = row.url;
-            const starttime = row.starttime;
-            const endtime = row.endtime;
+            const starttime = row.startTime;
+            const endtime = row.endTime;
             const user = row.user;
-            const rating = row.rating;
+            const rating = row.Rating;
             const problem = row.problem;
             const status = row.status;
             const rated = row.rated;
@@ -34,8 +34,8 @@ async function contests(ctx, next) {
             result.push({
                 id: id,
                 url: url,
-                starttime: starttime,
-                endtime: endtime,
+                startTime: starttime,
+                endTime: endtime,
                 user,
                 rating,
                 problem,

@@ -17,16 +17,16 @@ const contestClients = new Map(); // contestId -> Set of clients
 // 存储消息到数据库
 async function storeMessage(type, contestId, teamId, sender, message, mode) {
     await pool.query(
-        'INSERT INTO chat_messages (type, contest_id, team_id, sender, message, mode) VALUES (?,?,?,?,?,?)',
+        'INSERT INTO contest_messages (type, contest_id, team_id, sender, message, mode) VALUES (?,?,?,?,?,?)',
         [type, contestId, teamId, sender, message, mode]
     );
 }
 
 // 获取房间历史消息
-async function getContestMessage(contestId, teamId = null) {
+async function getContestMessage(contestId) {
     let result;
     [result] = await pool.query(
-        `SELECT * FROM chat_messages WHERE contest_id = ? AND type = "chat_message" ORDER BY timestamp ASC`,
+        `SELECT * FROM contest_messages WHERE contest_id = ? AND (type = "chat_message" OR type = "system_message") ORDER BY timestamp ASC`,
         [contestId]
     );
     if (result.length == 0) {
@@ -140,20 +140,29 @@ async function main() {
                     // 发送历史消息
                     try {
                         // 获取历史消息时严格按队伍隔离
-                        const history = await getContestMessage(contestId, data.teamId) || [];
+                        const history = await getContestMessage(contestId) || [];
                         const filteredHistory = history.filter(msg =>
-                            msg.mode == 'all' || msg.teamId === data.teamId
+                            msg.mode == 'all' || msg.teamId === data.teamId || msg.type == "system_message"
                         );
+
                         if (Array.isArray(filteredHistory)) {
                             filteredHistory.forEach(msg => {
-                                ws.send(JSON.stringify({
-                                    type: 'chat_message',
-                                    sender: msg.sender,
-                                    message: msg.message,
-                                    mode: msg.mode,
-                                    teamId: msg.teamId || null,
-                                    timestamp: msg.timestamp
-                                }));
+                                if (msg.type == "system_message") {
+                                    ws.send(JSON.stringify({
+                                        type: 'system_message',
+                                        message: msg.message,
+                                        timestamp: msg.timestamp
+                                    }));
+                                } else {
+                                    ws.send(JSON.stringify({
+                                        type: 'chat_message',
+                                        sender: msg.sender,
+                                        message: msg.message,
+                                        mode: msg.mode,
+                                        teamId: msg.teamId || null,
+                                        timestamp: msg.timestamp
+                                    }));
+                                }
                             });
                         }
                     } catch (error) {
@@ -207,6 +216,8 @@ async function main() {
                             });
                         }
                     }
+                } else if (data.type == 'system_message') {
+
                 }
             } catch (error) {
                 logger.error('ws: WebSocket 消息出错: ', error);
