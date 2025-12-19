@@ -28,24 +28,26 @@ async function contest_ac(ctx, next) {
         // 更新题目状态
         const problems = rows[0].problem;
         const user = rows[0].user;
+        const team = rows[0].team;
         let scorea = rows[0].scorea;
         let scoreb = rows[0].scoreb;
         let updated = false;
 
         for (let i = 0; i < problems.length; i++) {
             if (problems[i].title.includes(title) && problems[i].status == 0) {
-                user.A.forEach((userA) => {
-                    if (userA.name == username) {
-                        scorea += problems[i].score;
-                        userA.score += problems[i].score;
+                // 检查用户属于哪个队伍并更新分数
+                if (team && team.A && team.A.includes(username)) {
+                    scorea += problems[i].score;
+                    if (user[username]) {
+                        user[username].score += problems[i].score;
                     }
-                });
-                user.B.forEach((userB) => {
-                    if (userB.name == username) {
-                        scoreb += problems[i].score;
-                        userB.score += problems[i].score;
+                } else if (team && team.B && team.B.includes(username)) {
+                    scoreb += problems[i].score;
+                    if (user[username]) {
+                        user[username].score += problems[i].score;
                     }
-                });
+                }
+
                 problems[i].status = 1;
                 problems[i].acuser = username;
                 updated = true;
@@ -66,6 +68,27 @@ async function contest_ac(ctx, next) {
                 'UPDATE contest SET scorea = ?, scoreb = ? WHERE url = ?',
                 [scorea, scoreb, contestId]
             );
+
+            // 发送系统消息
+            const systemMsg = `用户 ${username} 成功解决了题目 ${title}!`;
+            try {
+                // 存储到数据库
+                await pool.query(
+                    'INSERT INTO contest_messages (type, contest_id, sender, message, mode) VALUES (?,?,?,?,?)',
+                    ['system_message', contestId, 'SYSTEM', systemMsg, 'all']
+                );
+
+                // 广播给所有在线用户
+                ctx.app.emit('broadcast', {
+                    type: 'system_message',
+                    contestId: contestId,
+                    message: systemMsg,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                logger.error(`contest_ac: 发送系统消息失败: ${error.message}`);
+            }
+
             ctx.status = 200;
             ctx.body = { success: true, message: 'AC状态更新成功' };
         }

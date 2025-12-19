@@ -14,6 +14,7 @@ async function rooms(ctx, next) {
             const id = row.id;
             const url = row.url;
             const master = row.master;
+            const team = row.team;
             const user = row.user;
             const setting = row.setting;
             const rated = row.rated;
@@ -21,6 +22,7 @@ async function rooms(ctx, next) {
                 id: id,
                 url: url,
                 master: master,
+                team,
                 user,
                 setting,
                 rated: rated

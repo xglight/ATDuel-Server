@@ -4,7 +4,7 @@ import bodyParser from '@koa/bodyparser';
 import cors from '@koa/cors';
 import apiControl from './import_api.mjs';
 import logger from './logger.mjs';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 
 const app = new Koa();
 const port = 3000;
@@ -34,6 +34,7 @@ async function getContestMessage(contestId) {
     }
     return result.map(row => {
         return {
+            type: row.type,
             contestId: row.contest_id,
             teamId: row.team_id,
             sender: row.sender,
@@ -44,24 +45,51 @@ async function getContestMessage(contestId) {
     });
 }
 
-// 广播消息给特定房间的客户端
+/**
+ * 广播消息给特定房间的所有客户端
+ * @param {string} roomId 房间ID
+ * @param {object} message 要广播的消息对象
+ */
 function broadcastToRoom(roomId, message) {
     const clients = roomClients.get(roomId);
     if (clients) {
+        const data = JSON.stringify(message);
         clients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify(message));
+                try {
+                    client.send(data, (err) => {
+                        if (err) {
+                            logger.error(`ws: 房间 ${roomId} 广播消息失败:`, err);
+                        }
+                    });
+                } catch (err) {
+                    logger.error(`ws: 房间 ${roomId} 广播异常:`, err);
+                }
             }
         });
     }
 }
 
+/**
+ * 广播消息给特定比赛的所有客户端
+ * @param {string} contestId 比赛ID
+ * @param {object} message 要广播的消息对象
+ */
 function broadcastToContest(contestId, message) {
     const clients = contestClients.get(contestId);
     if (clients) {
+        const data = JSON.stringify(message);
         clients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify(message));
+                try {
+                    client.send(data, (err) => {
+                        if (err) {
+                            logger.error(`ws: 比赛 ${contestId} 广播消息失败:`, err);
+                        }
+                    });
+                } catch (err) {
+                    logger.error(`ws: 比赛 ${contestId} 广播异常:`, err);
+                }
             }
         });
     }
@@ -99,8 +127,10 @@ async function main() {
         if (message.roomId) {
             broadcastToRoom(message.roomId, message);
         }
-        else if (message.contestId && message.type === 'contest_update') {
-            broadcastToContest(message.contestId, message);
+        else if (message.contestId) {
+            if (message.type === 'contest_update' || message.type === 'system_message') {
+                broadcastToContest(message.contestId, message);
+            }
         }
     });
 
@@ -147,21 +177,29 @@ async function main() {
 
                         if (Array.isArray(filteredHistory)) {
                             filteredHistory.forEach(msg => {
-                                if (msg.type == "system_message") {
-                                    ws.send(JSON.stringify({
-                                        type: 'system_message',
-                                        message: msg.message,
-                                        timestamp: msg.timestamp
-                                    }));
-                                } else {
-                                    ws.send(JSON.stringify({
-                                        type: 'chat_message',
-                                        sender: msg.sender,
-                                        message: msg.message,
-                                        mode: msg.mode,
-                                        teamId: msg.teamId || null,
-                                        timestamp: msg.timestamp
-                                    }));
+                                try {
+                                    if (msg.type == "system_message") {
+                                        ws.send(JSON.stringify({
+                                            type: 'system_message',
+                                            message: msg.message,
+                                            timestamp: msg.timestamp
+                                        }), (err) => {
+                                            if (err) logger.error('ws: 发送历史系统消息失败:', err);
+                                        });
+                                    } else {
+                                        ws.send(JSON.stringify({
+                                            type: 'chat_message',
+                                            sender: msg.sender,
+                                            message: msg.message,
+                                            mode: msg.mode,
+                                            teamId: msg.teamId || null,
+                                            timestamp: msg.timestamp
+                                        }), (err) => {
+                                            if (err) logger.error('ws: 发送历史聊天消息失败:', err);
+                                        });
+                                    }
+                                } catch (err) {
+                                    logger.error('ws: 发送历史消息异常:', err);
                                 }
                             });
                         }
@@ -202,22 +240,56 @@ async function main() {
                         // 队伍消息只发送给同队伍成员
                         const clients = contestClients.get(data.contestId);
                         if (clients) {
+                            const teamData = JSON.stringify({
+                                type: 'chat_message',
+                                sender: data.sender,
+                                message: data.message,
+                                mode: 'team',
+                                teamId: ws.teamId,
+                                timestamp: new Date().toISOString()
+                            });
                             clients.forEach(client => {
                                 if (client.teamId === ws.teamId && client.readyState === WebSocket.OPEN) {
-                                    client.send(JSON.stringify({
-                                        type: 'chat_message',
-                                        sender: data.sender,
-                                        message: data.message,
-                                        mode: 'team',
-                                        teamId: ws.teamId,
-                                        timestamp: new Date().toISOString()
-                                    }));
+                                    try {
+                                        client.send(teamData, (err) => {
+                                            if (err) {
+                                                logger.error(`ws: 队伍 ${ws.teamId} 消息发送失败:`, err);
+                                            }
+                                        });
+                                    } catch (err) {
+                                        logger.error(`ws: 队伍 ${ws.teamId} 消息发送异常:`, err);
+                                    }
                                 }
                             });
                         }
                     }
-                } else if (data.type == 'system_message') {
+                } else if (data.type === 'system_message') {
+                    // 系统消息处理
+                    if (!data.contestId || !data.message) {
+                        logger.warn('ws: 无效的系统消息: ', data);
+                        return;
+                    }
+                    logger.debug(`ws: 收到系统消息: ${data.message} 比赛: ${data.contestId}`);
+                    try {
+                        // 存储系统消息
+                        await storeMessage(
+                            'system_message',
+                            data.contestId,
+                            null,
+                            'SYSTEM',
+                            data.message,
+                            'all'
+                        );
 
+                        // 广播给所有人
+                        broadcastToContest(data.contestId, {
+                            type: 'system_message',
+                            message: data.message,
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (error) {
+                        logger.error('ws: 处理系统消息失败: ', error);
+                    }
                 }
             } catch (error) {
                 logger.error('ws: WebSocket 消息出错: ', error);

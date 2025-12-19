@@ -17,12 +17,14 @@ async function room(ctx, next) {
 
         logger.info(`room: 获取房间信息: ${id}`);
 
+        const team = rows[0].team;
         const user = rows[0].user;
         const setting = rows[0].setting;
         let result = {
             id: rows[0].id,
             url: rows[0].url,
             master: rows[0].master,
+            team,
             user,
             setting,
             rated: rows[0].rated,

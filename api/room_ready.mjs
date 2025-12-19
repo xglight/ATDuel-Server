@@ -25,32 +25,39 @@ async function room_ready(ctx, next) {
         }
 
         const room = roomRows[0];
+        let teamData;
         let userData;
         try {
+            teamData = typeof room.team === 'string' ? JSON.parse(room.team) : room.team;
             userData = typeof room.user === 'string' ? JSON.parse(room.user) : room.user;
-            if (!userData || typeof userData !== 'object') {
-                userData = { A: [], B: [] };
+            if (!teamData || typeof teamData !== 'object') {
+                teamData = { A: [], B: [] };
             }
-            if (!userData.A) userData.A = [];
-            if (!userData.B) userData.B = [];
+            if (!userData || typeof userData !== 'object') {
+                userData = {};
+            }
         } catch (e) {
-            logger.error(`room_ready: 解析 user 数据失败: ${e.message}`);
-            userData = { A: [], B: [] };
+            logger.error(`room_ready: 解析数据失败: ${e.message}`);
+            teamData = { A: [], B: [] };
+            userData = {};
         }
 
-        // 查找用户位置
-        const userIndex = userData[team].findIndex(u =>
-            u.place === position
-        );
+        // 查找该位置的用户
+        let username;
+        if (teamData && teamData[team]) {
+            username = teamData[team].find(name => userData[name] && userData[name].place === position);
+        }
 
-        if (userIndex === -1) {
+        if (!username) {
             ctx.status = 404;
             ctx.body = { success: false, error: '位置无用户' };
             return;
         }
 
-        // 更新准备状态
-        userData[team][userIndex].ready = ready;
+        // 更新准备状态 (新版结构)
+        if (userData[username] && !Array.isArray(userData[username])) {
+            userData[username].ready = ready;
+        }
 
         // 更新数据库
         await pool.query(
@@ -67,6 +74,7 @@ async function room_ready(ctx, next) {
         // 返回更新后的房间数据
         ctx.body = {
             success: true,
+            teamData,
             userData,
             setting: safeParseJSON(room.setting, {}),
             rated: room.rated

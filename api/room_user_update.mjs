@@ -33,7 +33,8 @@ async function room_user_update(ctx, next) {
         }
 
         const room = rows[0];
-        let userData = room.user || { A: [], B: [] };
+        let teamData = typeof room.team === 'string' ? JSON.parse(room.team) : (room.team || { A: [], B: [] });
+        let userData = typeof room.user === 'string' ? JSON.parse(room.user) : (room.user || {});
 
         // 处理setting字段
         let setting = {};
@@ -59,11 +60,12 @@ async function room_user_update(ctx, next) {
         // 操作处理
         if (op === 0) { // 退出
             // 从队伍中移除用户
-            const originalTeam = userData.A.some(u => u.name === username) ? 'A' :
-                userData.B.some(u => u.name === username) ? 'B' : null;
+            const originalTeam = teamData.A.includes(username) ? 'A' :
+                teamData.B.includes(username) ? 'B' : null;
 
             if (originalTeam) {
-                userData[originalTeam] = userData[originalTeam].filter(u => u.name !== username);
+                teamData[originalTeam] = teamData[originalTeam].filter(name => name !== username);
+                delete userData[username];
             }
         } else if (op === 1) { // 加入
             // 验证位置有效性
@@ -78,8 +80,7 @@ async function room_user_update(ctx, next) {
             }
 
             // 检查是否已在其他位置
-            const isInOtherTeam = userData.A.some(u => u.name === username) ||
-                userData.B.some(u => u.name === username);
+            const isInOtherTeam = teamData.A.includes(username) || teamData.B.includes(username);
             if (isInOtherTeam) {
                 ctx.status = 400;
                 ctx.body = { success: false, error: '请先退出当前队伍' };
@@ -87,17 +88,32 @@ async function room_user_update(ctx, next) {
                 return;
             }
 
-            const [avatar] = await conn.query(`SELECT * FROM user WHERE username = ?`, [username]);
+            // 检查该位置是否已被占用
+            const isPosOccupied = Object.values(userData).some(u => u.place === pos && teamData[teamKey].includes(Object.keys(userData).find(key => userData[key] === u)));
+            // 修正检查：直接遍历 teamData[teamKey] 找到对应的 user
+            const occupiedBy = teamData[teamKey].find(name => userData[name] && userData[name].place === pos);
+            if (occupiedBy) {
+                ctx.status = 400;
+                ctx.body = { success: false, error: '该位置已被占用' };
+                await conn.rollback();
+                return;
+            }
 
-            userData[teamKey].splice(pos, 0, { avatar: avatar[0].avatar, name: username, place: pos, ready: false, score: 0 });
-            // 确保不超过最大人数
-            userData[teamKey] = userData[teamKey].slice(0, maxPos);
+            const [userRows] = await conn.query(`SELECT avatar FROM user WHERE username = ?`, [username]);
+            const avatar = userRows[0]?.avatar || '';
+
+            teamData[teamKey].push(username);
+            userData[username] = {
+                avatar: avatar,
+                place: pos,
+                ready: false
+            };
         }
 
         // 更新数据库
         await conn.query(
-            `UPDATE room SET user = ?, last_updated = NOW() WHERE url = ?`,
-            [JSON.stringify(userData), roomId]
+            `UPDATE room SET team = ?, user = ?, last_updated = NOW() WHERE url = ?`,
+            [JSON.stringify(teamData), JSON.stringify(userData), roomId]
         );
 
         // 获取更新后的房间信息

@@ -4,9 +4,17 @@ import pool from '../db.mjs';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
 
+/**
+ * 处理队伍成员的提交记录
+ * @param {Array} team 队伍成员列表 (用户名字符串数组或包含 name 属性的对象数组)
+ * @param {string} problemName 题目名称
+ * @param {Array} subdata 提交记录数据
+ */
 async function processTeamSubmissions(team, problemName, subdata) {
+    if (!team) return;
     for (const member of team) {
-        const ATName = await fetch(config.buildApiUrl(`/atname/${member.name}`)).then(res => res.text());
+        const username = typeof member === 'string' ? member : member.name;
+        const ATName = await fetch(config.buildApiUrl(`/atname/${username}`)).then(res => res.text());
         const res = await fetch(config.buildApiUrl(`/user_submissions`), {
             method: 'POST',
             headers: {
@@ -50,31 +58,38 @@ async function processTeamSubmissions(team, problemName, subdata) {
 
 let startTime;
 
+/**
+ * 更新提交记录的 API 处理函数
+ * @param {object} ctx Koa 上下文
+ * @param {function} next 下一个中间件
+ */
 async function submission_update(ctx, next) {
     try {
         const { problemName, contestId } = ctx.request.body;
 
         // 获取当前比赛数据
-        const [contest] = await pool.query('SELECT * FROM contest WHERE url = ?', [contestId]);
-        if (!contest.length) {
+        const [contestRows] = await pool.query('SELECT * FROM contest WHERE url = ?', [contestId]);
+        if (!contestRows.length) {
             ctx.status = 404;
             ctx.body = { success: false, message: '比赛不存在' };
             return;
         }
 
+        const contest = contestRows[0];
         logger.info(`submission_update: 更新提交记录: ${problemName}`);
 
-        let subdata = contest[0].submission || [];
-
-        startTime = contest[0].startTime;
+        let subdata = contest.submission || [];
+        startTime = contest.startTime;
 
         // 获取比赛队伍信息
-        const response = await fetch(config.buildApiUrl(`/contest/${contestId}`));
-        const { user: teams } = await response.json();
+        const team = contest.team;
+        const user = contest.user;
 
         // 处理两队提交记录
-        await processTeamSubmissions(teams.A, problemName, subdata);
-        await processTeamSubmissions(teams.B, problemName, subdata);
+        if (team) {
+            await processTeamSubmissions(team.A, problemName, subdata);
+            await processTeamSubmissions(team.B, problemName, subdata);
+        }
 
         // 更新数据库
         await pool.query(

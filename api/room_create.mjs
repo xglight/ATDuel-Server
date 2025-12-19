@@ -33,10 +33,11 @@ async function createRoom(ctx, next) {
         const roomData = {
             url: roomUrl,
             master: body.username,
-            user: JSON.stringify({
+            team: JSON.stringify({
                 A: [],
                 B: []
             }),
+            user: JSON.stringify({}),
             setting: JSON.stringify({
                 mode: body.playerCount || '1v1',
                 rating_lowest: body.ratingMin || 0,

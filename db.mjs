@@ -54,6 +54,7 @@ async function init() {
                     url VARCHAR(255) NOT NULL,
                     startTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     endTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    team JSON,
                     user JSON,
                     problem JSON,
                     submission JSON,
@@ -76,6 +77,7 @@ async function init() {
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     url VARCHAR(255) NOT NULL,
                     master VARCHAR(255) NOT NULL,
+                    team JSON,
                     user JSON,
                     setting JSON,
                     rated BOOLEAN DEFAULT false,
@@ -122,6 +124,15 @@ async function init() {
                 logger.info(`db: 成功创建表 ${tableName}`);
             } else {
                 logger.debug(`db: 表 ${tableName} 已存在`);
+                // 检查是否需要添加 team 列
+                if (tableName === 'contest' || tableName === 'room') {
+                    const [columns] = await pool.execute(`SHOW COLUMNS FROM ${tableName}`);
+                    const hasTeam = columns.some(c => c.Field === 'team');
+                    if (!hasTeam) {
+                        await pool.execute(`ALTER TABLE ${tableName} ADD COLUMN team JSON AFTER ${tableName === 'contest' ? 'endTime' : 'master'}`);
+                        logger.info(`db: 成功为表 ${tableName} 添加 team 列`);
+                    }
+                }
             }
         }
 

@@ -24,6 +24,7 @@ async function contests(ctx, next) {
             const url = row.url;
             const starttime = row.startTime;
             const endtime = row.endTime;
+            const team = row.team;
             const user = row.user;
             const rating = row.Rating;
             const problem = row.problem;
@@ -36,6 +37,7 @@ async function contests(ctx, next) {
                 url: url,
                 startTime: starttime,
                 endTime: endtime,
+                team,
                 user,
                 rating,
                 problem,

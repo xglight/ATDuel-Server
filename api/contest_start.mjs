@@ -1,6 +1,7 @@
 // contest_start.mjs
 import pool from '../db.mjs';
 import config from '../config.mjs';
+import logger from '../logger.mjs';
 
 async function contest_start(ctx, next) {
     const { room_id } = ctx.request.body;
@@ -20,34 +21,53 @@ async function contest_start(ctx, next) {
             ctx.body = { success: false, error: '房间不存在' };
             return;
         }
-        const users = [...row[0].user.A, ...row[0].user.B];
-        if (users.some(u => !u.ready)) {
+        const room = row[0];
+        const team = typeof room.team === 'string' ? JSON.parse(room.team) : room.team;
+        const user = typeof room.user === 'string' ? JSON.parse(room.user) : room.user;
+
+        const allUsernames = [...team.A, ...team.B];
+        if (allUsernames.length === 0) {
+            ctx.status = 403;
+            ctx.body = { success: false, error: '房间内无用户' };
+            return;
+        }
+
+        if (allUsernames.some(name => !user[name] || !user[name].ready)) {
             ctx.status = 403;
             ctx.body = { success: false, error: '房间未准备' };
             return;
         }
-        const user = row[0].user;
-        if (user.A.length === 0 || user.B.length === 0) {
+
+        if (team.A.length === 0 || team.B.length === 0) {
             ctx.status = 403;
             ctx.body = { success: false, error: 'A 或 B 队伍人数为 0' };
             return;
         }
-        const id = row[0].id;
-        const url = row[0].url;
-        for (let i = 0; i < user.A.length; i++) delete user.A[i].ready;
-        for (let i = 0; i < user.B.length; i++) delete user.B[i].ready;
-        const maxRating = row[0].setting.rating_highest;
-        const minRating = row[0].setting.rating_lowest;
-        const problemCount = row[0].setting.problem_count;
-        const rated = row[0].rated;
+
+        const id = room.id;
+        const url = room.url;
+
+        // 准备比赛用的用户数据，移除 ready 字段并添加 score
+        const contestUser = {};
+        for (const username of allUsernames) {
+            contestUser[username] = {
+                avatar: user[username].avatar,
+                place: user[username].place,
+                score: 0
+            };
+        }
+
+        const maxRating = room.setting.rating_highest;
+        const minRating = room.setting.rating_lowest;
+        const problemCount = room.setting.problem_count;
+        const rated = room.rated;
         const problemList = [];
         // 获取所有符合条件的题目
         const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minRating, maxRating]);
         const filteredProblems = allProblems.filter(p => !p.title.includes('ahc'));
 
-        const allUsers = [...user.A, ...user.B];
-        const atnames = await Promise.all(allUsers.map(u => fetch(config.buildApiUrl(`/atname/${u.name}`)).then(res => res.text())));
-        const userAtnameMap = new Map(allUsers.map((u, i) => [u.name, atnames[i]]));
+        const atnames = await Promise.all(allUsernames.map(name => fetch(config.buildApiUrl(`/atname/${name}`)).then(res => res.text())));
+        const userAtnameMap = new Map(allUsernames.map((name, i) => [name, atnames[i]]));
 
         const checkUserAC = async (username, task) => {
             const atname = userAtnameMap.get(username);
@@ -79,52 +99,84 @@ async function contest_start(ctx, next) {
             return false;
         };
 
-        const getProblemsByTier = (problems, count) => {
-            if (count <= 3) return [problems];
-            const range = maxRating - minRating;
-            const tier1Max = minRating + range * 0.3;
-            const tier2Max = minRating + range * 0.8;
-            return [
-                problems.filter(p => p.difficulty <= tier1Max),
-                problems.filter(p => p.difficulty > tier1Max && p.difficulty <= tier2Max),
-                problems.filter(p => p.difficulty > tier2Max),
-            ];
-        };
+        /**
+         * 选择比赛题目
+         * @param {Array} problems 候选题目列表
+         * @param {number} count 需要选择的题目数量
+         * @param {number} min 最低难度
+         * @param {number} max 最高难度
+         * @returns {Promise<Array>} 选择的题目列表
+         */
+        const selectProblems = async (problems, count, min, max) => {
+            const result = [];
+            const usedUrls = new Set();
 
-        const generateValidProblem = async (problems) => {
-            if (problems.length === 0) return null;
-            // Pick a random problem, but retry a few times if a valid one isn't found
-            for (let i = 0; i < 5; i++) {
-                const problem = problems[Math.floor(Math.random() * problems.length)];
-                if (!problem) continue;
+            for (let i = 0; i < count; i++) {
+                // 计算目标难度，确保在 [min, max] 之间均匀分布
+                const targetDiff = count > 1
+                    ? min + (max - min) * (i / (count - 1))
+                    : (min + max) / 2;
 
-                const checkResults = await Promise.all(
-                    allUsers.map(u => checkUserAC(u.name, problem.url.split('/').pop()))
-                );
+                // 初始搜索范围
+                let margin = 50;
+                let candidates = [];
 
-                if (!checkResults.some(hasAC => hasAC)) {
-                    return problem;
+                // 逐渐扩大搜索范围直到找到足够的候选题目
+                while (candidates.length < 5 && margin < (max - min + 100)) {
+                    candidates = problems.filter(p =>
+                        Math.abs(p.difficulty - targetDiff) <= margin &&
+                        !usedUrls.has(p.url)
+                    );
+                    margin += 50;
+                }
+
+                // 如果还是没有题目，尝试从所有可用题目中找最接近的
+                if (candidates.length === 0) {
+                    candidates = problems
+                        .filter(p => !usedUrls.has(p.url))
+                        .sort((a, b) => Math.abs(a.difficulty - targetDiff) - Math.abs(b.difficulty - targetDiff))
+                        .slice(0, 5);
+                }
+
+                // 随机排序候选题目
+                candidates.sort(() => Math.random() - 0.5);
+
+                let selected = null;
+                // 检查候选题目是否已被用户 AC，限制检查数量以防过多请求
+                const checkLimit = Math.min(candidates.length, 5);
+                for (let j = 0; j < checkLimit; j++) {
+                    const cand = candidates[j];
+                    const task = cand.url.split('/').pop();
+                    const checkResults = await Promise.all(
+                        allUsernames.map(name => checkUserAC(name, task))
+                    );
+
+                    if (!checkResults.some(hasAC => hasAC)) {
+                        selected = cand;
+                        break;
+                    }
+                }
+
+                // 如果所有候选都被 AC 了，就从候选里挑一个
+                if (!selected && candidates.length > 0) {
+                    selected = candidates[0];
+                }
+
+                if (selected) {
+                    usedUrls.add(selected.url);
+                    result.push({
+                        ...selected,
+                        status: 0,
+                        acuser: "",
+                        score: 0 // 稍后统一设置
+                    });
                 }
             }
-            return null; // Return null if no valid problem is found after retries
+            return result;
         };
 
-        const problemTiers = getProblemsByTier(filteredProblems, problemCount);
-        const problemPromises = problemTiers.flatMap(tier =>
-            Array.from({ length: Math.ceil(problemCount * 2 / problemTiers.length) }, () => generateValidProblem(tier.length > 0 ? tier : filteredProblems))
-        );
-
-        // 等待所有题目生成完成
-        const candidateProblems = (await Promise.all(problemPromises)).filter(p => p !== null);
-
-        // 选取前problemCount个有效题目
-
-        for (let i = 0; i < Math.min(problemCount, candidateProblems.length); i++) {
-            candidateProblems[i].status = 0;
-            candidateProblems[i].acuser = "";
-            candidateProblems[i].score = 0;
-            problemList.push(candidateProblems[i]);
-        }
+        const selectedProblems = await selectProblems(filteredProblems, problemCount, minRating, maxRating);
+        problemList.push(...selectedProblems);
 
         problemList.sort((a, b) => a.difficulty - b.difficulty);
 
@@ -137,12 +189,13 @@ async function contest_start(ctx, next) {
 
         const contestData = JSON.stringify({
             url: url,
-            user: JSON.stringify(user),
+            team: JSON.stringify(team),
+            user: JSON.stringify(contestUser),
             problemList: JSON.stringify(problemList),
             rated: rated
         });
         logger.info(`contest_start: 比赛开始: ${url}`);
-        await pool.execute('INSERT INTO contest (url, startTime, user, problem, status, rated) VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user = VALUES(user), problem = VALUES(problem), status = VALUES(status), rated = VALUES(rated)', [url, JSON.stringify(user), JSON.stringify(problemList), 0, rated]);
+        await pool.execute('INSERT INTO contest (id, url, startTime, team, user, problem, status, rated) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)', [id, url, JSON.stringify(team), JSON.stringify(contestUser), JSON.stringify(problemList), 0, rated]);
         // 删除房间
         await pool.execute('DELETE FROM room WHERE url = ?', [url]);
         const now = Date.now();
@@ -154,7 +207,8 @@ async function contest_start(ctx, next) {
             contestData: {
                 id,
                 url,
-                user,
+                team,
+                user: contestUser,
                 problemList,
                 start_time: now,
                 rated
