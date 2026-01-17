@@ -9,7 +9,7 @@ async function check_login(ctx, next) {
         ctx.body = { success: false, message: 'token can not be empty' };
         return;
     }
-    logger.debug('admin_check: 请求检查登录: ', token);
+    logger.debug('admin_check: Admin login check request: ', token);
 
     try {
         const [rows] = await pool.execute(
@@ -38,12 +38,12 @@ async function check_login(ctx, next) {
                 'DELETE FROM admin_status WHERE token = ?',
                 [token]
             );
-            logger.debug('admin_check: 登录过期');
+            logger.debug('admin_check: Login expired');
             ctx.status = 401;
             ctx.body = { success: false, message: 'login expired' };
         }
     } catch (error) {
-        logger.error('admin_check: 查询出错: ', error);
+        logger.error('admin_check: Query error: ', error);
         ctx.status = 500;
         ctx.type = 'text/json';
         ctx.body = { success: false, message: 'Server Error' };

@@ -4,65 +4,88 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const configData = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
+
+// 加载环境变量
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+/**
+ * 从环境变量获取配置，带默认值
+ * @param {string} key 环境变量名
+ * @param {any} defaultValue 默认值
+ * @returns {any}
+ */
+function getEnv(key, defaultValue) {
+    const value = process.env[key];
+    if (value === undefined) {
+        return defaultValue;
+    }
+    // 尝试转换数字
+    if (!isNaN(value) && value !== '') {
+        return Number(value);
+    }
+    return value;
+}
 
 /**
  * 服务器配置
- * @type {object}
- * @property {string} protocol - 服务器协议
- * @property {string} host - 服务器主机名
- * @property {number} port - 服务器端口
- * @property {string} apiPrefix - API前缀
  */
-const SERVER_CONFIG = configData.server;
+const SERVER_CONFIG = {
+    protocol: getEnv('SERVER_PROTOCOL', 'http'),
+    host: getEnv('SERVER_HOST', 'localhost'),
+    port: getEnv('SERVER_PORT', 3000),
+    apiPrefix: '/api'
+};
 
+/**
+ * 构建 API URL
+ * @param {string} endpoint 端点路径
+ * @returns {string} 完整的 API URL
+ */
 function buildApiUrl(endpoint) {
     return `${SERVER_CONFIG.protocol}://${SERVER_CONFIG.host}:${SERVER_CONFIG.port}${SERVER_CONFIG.apiPrefix}${endpoint}`
 }
 
 /**
- * MySQL数据库配置
- * @type {object}
- * @property {string} host - 数据库主机名
- * @property {number} port - 数据库端口
- * @property {string} user - 数据库用户名
- * @property {string} password - 数据库密码
- * @property {string} database - 数据库名
+ * MySQL 数据库配置
  */
-const MYSQL_CONFIG = configData.mysql;
+const MYSQL_CONFIG = {
+    host: getEnv('MYSQL_HOST', 'localhost'),
+    port: getEnv('MYSQL_PORT', 3306),
+    user: getEnv('MYSQL_USER', 'root'),
+    password: getEnv('MYSQL_PASSWORD', ''),
+    database: getEnv('MYSQL_DATABASE', 'atduel')
+};
 
 /**
  * 注册相关配置
- * @type {object}
- * @property {number} ratingLowerLimit - 注册用户的最低Rating
  */
-const REGISTER_CONFIG = configData.register;
+const REGISTER_CONFIG = {
+    ratingLowerLimit: getEnv('REGISTER_RATING_LOWER_LIMIT', 1000)
+};
 
 /**
  * 内容相关配置
- * @type {object}
- * @property {number} peopleLimit - 房间人数限制
- * @property {number} problemCountLowerLimit - 题目数量下限
- * @property {number} problemCountUpperLimit - 题目数量上限
- * @property {number} timeLimit - 时间限制
  */
-const CONTENT_CONFIG = configData.content;
+const CONTENT_CONFIG = {
+    peopleLimit: getEnv('CONTENT_PEOPLE_LIMIT', 3),
+    problemCountLowerLimit: getEnv('CONTENT_PROBLEM_COUNT_LOWER_LIMIT', 1),
+    problemCountUpperLimit: getEnv('CONTENT_PROBLEM_COUNT_UPPER_LIMIT', 10),
+    timeLimit: getEnv('CONTENT_TIME_LIMIT', 86400)
+};
 
 /**
  * 日志等级
- * @type {string}
  */
-const LOG_LEVEL = configData.logLevel;
+const LOG_LEVEL = getEnv('LOG_LEVEL', 'info');
 
-const ADMIN_PASSWORD = configData.adminPassword;
 export default {
     server: SERVER_CONFIG,
     mysql: MYSQL_CONFIG,
     register: REGISTER_CONFIG,
     content: CONTENT_CONFIG,
     logLevel: LOG_LEVEL,
-    adminPassword: ADMIN_PASSWORD,
     buildApiUrl
 };

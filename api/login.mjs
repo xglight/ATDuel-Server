@@ -13,7 +13,7 @@ async function login(ctx, next) {
         return;
     }
 
-    logger.debug(`login: 用户 ${username} 登录`);
+    logger.debug(`login: User ${username} is logging in`);
 
     ctx.type = 'text/json';
     try {
@@ -26,7 +26,7 @@ async function login(ctx, next) {
             for (const ban of rowsBan) {
                 if (new Date(ban.endBanTime) > new Date()) {
                     ctx.status = 403;
-                    ctx.body = { success: false, message: '你已被禁止登录，直到 ' + ban.endBanTime };
+                    ctx.body = { success: false, message: 'You have been banned until ' + ban.endBanTime };
                     return;
                 }
             }
@@ -44,20 +44,20 @@ async function login(ctx, next) {
                     `INSERT INTO login_status (username, token, loginTime, rememberMe) VALUES (?, ?, CURRENT_TIMESTAMP, ?) ON DUPLICATE KEY UPDATE loginTime = CURRENT_TIMESTAMP, rememberMe = VALUES(rememberMe)`,
                     [username, token, rememberMe]
                 );
-                logger.debug(`login: 用户 ${username} 登录成功`);
+                logger.debug(`login: User ${username} logged in successfully`);
                 ctx.body = { success: true, message: 'login success' };
             } else {
                 ctx.status = 401;
-                logger.debug(`login: 用户 ${username} 密码错误`);
+                logger.debug(`login: User ${username} password incorrect`);
                 ctx.body = { success: false, message: 'username or password error' };
             }
         } else {
             ctx.status = 404;
-            logger.debug(`login: 用户 ${username} 不存在`);
+            logger.debug(`login: User ${username} does not exist`);
             ctx.body = { success: false, message: 'username or password error' };
         }
     } catch (err) {
-        logger.error(`login: 查询错误: ${err.message}`);
+        logger.error(`login: Query error: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: 'Server Error' };
     }

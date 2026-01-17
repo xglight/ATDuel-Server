@@ -9,54 +9,57 @@ import logger from '../logger.mjs';
  * @param {Array} team 队伍成员列表 (用户名字符串数组或包含 name 属性的对象数组)
  * @param {string} problemName 题目名称
  * @param {Array} subdata 提交记录数据
+ * @param {string} startTime 比赛开始时间
  */
-async function processTeamSubmissions(team, problemName, subdata) {
+async function processTeamSubmissions(team, problemName, subdata, startTime) {
     if (!team) return;
     for (const member of team) {
         const username = typeof member === 'string' ? member : member.name;
-        const ATName = await fetch(config.buildApiUrl(`/atname/${username}`)).then(res => res.text());
-        const res = await fetch(config.buildApiUrl(`/user_submissions`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username: ATName,
-                task: problemName
-            })
-        });
-        const data = await res.json();
+        try {
+            const ATName = await fetch(config.buildApiUrl(`/atname/${username}`)).then(res => res.text());
+            const res = await fetch(config.buildApiUrl(`/user_submissions`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: ATName,
+                    task: problemName
+                })
+            });
+            const data = await res.json();
 
-        for (const submission of data) {
-            const t1 = new Date(startTime);
-            const t2 = new Date(submission.time);
-            if (t2 < t1) {
-                continue;
+            for (const submission of data) {
+                const t1 = new Date(startTime);
+                const t2 = new Date(submission.time);
+                if (t2 < t1) {
+                    continue;
+                }
+
+                const tmp = {
+                    task: problemName,
+                    username: submission.username,
+                    status: submission.status,
+                    time: submission.time
+                };
+
+                const existing = subdata.find(s =>
+                    s.task === tmp.task &&
+                    s.username === tmp.username &&
+                    s.time === tmp.time
+                );
+
+                if (existing) {
+                    existing.status = tmp.status;
+                } else {
+                    subdata.push(tmp);
+                }
             }
-
-            const tmp = {
-                task: problemName,
-                username: submission.username,
-                status: submission.status,
-                time: submission.time
-            };
-
-            const existing = subdata.find(s =>
-                s.task === tmp.task &&
-                s.username === tmp.username &&
-                s.time === tmp.time
-            );
-
-            if (existing) {
-                existing.status = tmp.status;
-            } else {
-                subdata.push(tmp);
-            }
+        } catch (err) {
+            logger.error(`submission_update: Failed to process submissions for user ${username}: ${err.message}`);
         }
     }
 }
-
-let startTime;
 
 /**
  * 更新提交记录的 API 处理函数
@@ -71,38 +74,53 @@ async function submission_update(ctx, next) {
         const [contestRows] = await pool.query('SELECT * FROM contest WHERE url = ?', [contestId]);
         if (!contestRows.length) {
             ctx.status = 404;
-            ctx.body = { success: false, message: '比赛不存在' };
+            ctx.body = { success: false, message: 'Contest does not exist' };
             return;
         }
 
         const contest = contestRows[0];
-        logger.info(`submission_update: 更新提交记录: ${problemName}`);
-
-        let subdata = contest.submission || [];
-        startTime = contest.startTime;
+        logger.info(`submission_update: Updating submissions: ${problemName}`);
 
         // 获取比赛队伍信息
-        const team = contest.team;
-        const user = contest.user;
+        const [teams] = await pool.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contest.id]);
+        const teamA = teams.filter(t => t.team_label === 'A').map(t => t.username);
+        const teamB = teams.filter(t => t.team_label === 'B').map(t => t.username);
 
-        // 处理两队提交记录
-        if (team) {
-            await processTeamSubmissions(team.A, problemName, subdata);
-            await processTeamSubmissions(team.B, problemName, subdata);
-        }
+        const subdata = [];
+
+        // 处理两队提交记录，传入 contest.startTime 避免全局变量冲突
+        await Promise.all([
+            processTeamSubmissions(teamA, problemName, subdata, contest.startTime),
+            processTeamSubmissions(teamB, problemName, subdata, contest.startTime)
+        ]);
 
         // 更新数据库
-        await pool.query(
-            'UPDATE contest SET submission = ? WHERE url = ?',
-            [JSON.stringify(subdata), contestId]
-        );
+        for (const sub of subdata) {
+            // 检查是否已存在
+            const [existing] = await pool.query(
+                'SELECT id FROM contest_submissions WHERE contest_id = ? AND username = ? AND task_title = ? AND submission_time = ?',
+                [contest.id, sub.username, sub.task, sub.time]
+            );
+
+            if (existing.length > 0) {
+                await pool.query(
+                    'UPDATE contest_submissions SET status = ? WHERE id = ?',
+                    [sub.status, existing[0].id]
+                );
+            } else {
+                await pool.query(
+                    'INSERT INTO contest_submissions (contest_id, username, task_title, status, submission_time) VALUES (?, ?, ?, ?, ?)',
+                    [contest.id, sub.username, sub.task, sub.status, sub.time]
+                );
+            }
+        }
 
         ctx.status = 200;
-        ctx.body = { success: true, message: '提交记录更新成功' };
+        ctx.body = { success: true, message: 'Submissions updated successfully' };
     } catch (error) {
-        logger.error(`submission_update: 更新提交记录失败: ${error.message}`);
+        logger.error(`submission_update: Failed to update submissions: ${error.message}`);
         ctx.status = 500;
-        ctx.body = { success: false, message: '提交记录更新失败' };
+        ctx.body = { success: false, message: 'Failed to update submissions' };
     }
 }
 

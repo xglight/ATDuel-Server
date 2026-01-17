@@ -9,13 +9,13 @@ async function scan(router, import_apiDir) {
     const currentDir = dirname(fileURLToPath(import.meta.url));
     const fullApiPath = resolve(currentDir, import_apiDir);
 
-    logger.info(`import_api: 扫描文件夹 ${fullApiPath}`);
+    logger.info(`import_api: Scanning folder ${fullApiPath}`);
     let files;
 
     try {
         files = readdirSync(fullApiPath).filter(f => f.endsWith('.mjs'));
     } catch (err) {
-        logger.error(`import_api: 读取 API 目录失败: ${err.message}`);
+        logger.error(`import_api: Failed to read API directory: ${err.message}`);
         return;
     }
 
@@ -28,7 +28,7 @@ async function scan(router, import_apiDir) {
             let { default: mapping } = await import(filePath);
 
             if (!mapping) {
-                logger.warn(`import_api: ${file} 未导出默认对象`);
+                logger.warn(`import_api: ${file} does not export a default object`);
                 continue;
             }
 
@@ -37,17 +37,17 @@ async function scan(router, import_apiDir) {
                 if (url.startsWith('GET ')) {
                     let p = url.substring(4);
                     router.get(p, mapping[url]);
-                    logger.debug(`import_api: 匹配到: GET ${p}`);
+                    logger.debug(`import_api: Matched: GET ${p}`);
                 } else if (url.startsWith('POST ')) {
                     let p = url.substring(5);
                     router.post(p, mapping[url]);
-                    logger.debug(`import_api: 匹配到: POST ${p}`);
+                    logger.debug(`import_api: Matched: POST ${p}`);
                 } else {
-                    logger.warn(`import_api: 匹配失败: ${url}`);
+                    logger.warn(`import_api: Match failed: ${url}`);
                 }
             }
         } catch (err) {
-            logger.error(`import_api: 导入 ${file} 失败: ${err.message}`);
+            logger.error(`import_api: Failed to import ${file}: ${err.message}`);
         }
     }
 }
@@ -59,6 +59,6 @@ export default async function (app, import_apiDir = 'api', prefix = '') {
 
     // 将app实例传递给路由
     router.app = app;
-    logger.info(`import_api: 路由注册完成`);
+    logger.info(`import_api: Route registration completed`);
     return router.routes();
 }

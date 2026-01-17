@@ -7,10 +7,10 @@ async function getUserSubmission(ctx, next) {
     let status = ctx.request.body.status;
     if (!username || !task) {
         ctx.status = 400;
-        ctx.body = { error: '参数错误' };
+        ctx.body = { error: 'Invalid parameters' };
         return;
     }
-    logger.debug(`user_submissions: 获取用户 ${username} 对任务 ${task} 的提交记录`);
+    logger.debug(`user_submissions: Fetching submission records for user ${username} on task ${task}`);
     if (!status) status = "";
     const contest = task.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
     const url = "https://atcoder.jp/contests/" + contest + "/submissions?f.Task=" + task + "&f.LanguageName=&f.Status=" + status + "&f.User=" + username;
@@ -46,15 +46,15 @@ async function getUserSubmission(ctx, next) {
             ctx.status = 200;
             ctx.body = JSON.stringify(result);
         } catch (e) {
-            logger.error(`user_submissions: 解析 HTML 失败: ${e.message}`);
+            logger.error(`user_submissions: Failed to parse HTML: ${e.message}`);
             ctx.status = 500;
-            ctx.body = { error: '服务器错误' };
+            ctx.body = { error: 'Server Error' };
             return;
         }
     } catch (e) {
-        logger.error(`user_submissions: 获取用户 ${username} 对任务 ${task} 的提交记录失败: ${e.message}`);
+        logger.error(`user_submissions: Failed to fetch submission records for user ${username} on task ${task}: ${e.message}`);
         ctx.status = 500;
-        ctx.body = { error: '服务器错误' };
+        ctx.body = { error: 'Server Error' };
         return;
     }
 }

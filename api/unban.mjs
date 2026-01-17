@@ -21,14 +21,14 @@ async function unbanUser(ctx, next) {
         ctx.body = { success: false, message: 'Token is invalid.' };
         return;
     }
-    logger.info(`unbanUser: 取消封禁用户 ${username}`);
+    logger.info(`unbanUser: Unbanning user ${username}`);
 
     try {
         await pool.execute('DELETE FROM user_ban WHERE username = ?', [username]);
         ctx.status = 200;
         ctx.body = { success: true, message: 'User unbanned successfully' };
     } catch (err) {
-        logger.error(`unbanUser: 数据库错误: ${err.message}`);
+        logger.error(`unbanUser: Database error: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: 'Server Error' };
     }

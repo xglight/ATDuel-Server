@@ -25,7 +25,7 @@ async function getUsers(ctx, next) {
         return;
     }
 
-    logger.debug(`getUsers: 正在查询用户，查询参数: ${query}`);
+    logger.debug(`getUsers: Querying users, query parameter: ${query}`);
 
     try {
         const [rows] = await pool.execute('SELECT id, username, ATName, avatar, rating FROM user');
@@ -42,11 +42,11 @@ async function getUsers(ctx, next) {
             row.isBanned = rowsBan.some(ban => ban.username === row.username);
         }
 
-        logger.debug(`getUsers: 查询到 ${rows.length} 个用户`);
+        logger.debug(`getUsers: Found ${rows.length} users`);
         ctx.type = 'text/json';
         ctx.body = rows;
     } catch (err) {
-        logger.error(`getUsers: 查询错误: ${err.message}`);
+        logger.error(`getUsers: Query error: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: 'Server Error' };
     }

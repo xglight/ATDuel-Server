@@ -37,7 +37,7 @@ async function getLogs(ctx, next) {
         ctx.body = { success: false, message: 'token can not be empty' };
         return;
     }
-    logger.debug(`getLogs: 请求日志,date: ${date}`);
+    logger.debug(`getLogs: Requesting logs, date: ${date}`);
     try {
         const response = await fetch(config.buildApiUrl('/admin/check'), {
             method: 'POST',

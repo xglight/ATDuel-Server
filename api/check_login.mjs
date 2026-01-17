@@ -9,7 +9,7 @@ async function check_login(ctx, next) {
         ctx.body = { success: false, message: 'username or token can not be empty' };
         return;
     }
-    logger.debug('check_login: 请求检查登录: ', username, token);
+    logger.debug('check_login: Login check request: ', username, token);
 
     try {
         const [rows] = await pool.execute(
@@ -29,7 +29,7 @@ async function check_login(ctx, next) {
             for (const ban of rowsBan) {
                 if (new Date(ban.endBanTime) > new Date()) {
                     ctx.status = 403;
-                    ctx.body = { success: false, message: '你已被禁止登录，直到 ' + ban.endBanTime };
+                    ctx.body = { success: false, message: 'You have been banned from logging in until ' + ban.endBanTime };
                     return;
                 }
             }
@@ -51,12 +51,12 @@ async function check_login(ctx, next) {
                 'DELETE FROM login_status WHERE username = ? AND token = ?',
                 [username, token]
             );
-            logger.debug('check_login: 用户 ', username, ' 登录过期');
+            logger.debug('check_login: User ', username, ' login expired');
             ctx.status = 401;
             ctx.body = { success: false, message: 'login expired' };
         }
     } catch (error) {
-        logger.error('check_login: 查询出错: ', error);
+        logger.error('check_login: Query error: ', error);
         ctx.status = 500;
         ctx.type = 'text/json';
         ctx.body = { success: false, message: 'Server Error' };

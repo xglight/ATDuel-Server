@@ -23,12 +23,12 @@ async function banUser(ctx, next) {
     }
 
     try {
-        logger.info(`banUser: 封禁用户 ${username}，原因: ${reason}，截止时间: ${endBanTime}`);
+        logger.info(`banUser: Banning user ${username}, reason: ${reason}, end time: ${endBanTime}`);
         await pool.execute('INSERT INTO user_ban (username, reason, endBanTime) VALUES (?, ?, ?)', [username, reason, endBanTime]);
         ctx.status = 200;
         ctx.body = { success: true, message: 'User banned successfully' };
     } catch (err) {
-        logger.error(`banUser: 数据库错误: ${err.message}`);
+        logger.error(`banUser: Database error: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: 'Server Error' };
     }

@@ -8,27 +8,27 @@ async function logout(ctx, next) {
     if (!username || !token) {
         ctx.status = 400;
         ctx.body = {
-            message: '用户名或token不能为空'
+            message: 'Username or token cannot be empty'
         };
         return;
     }
 
-    logger.debug(`logout: 用户 ${username} 登出`);
+    logger.debug(`logout: User ${username} logged out`);
 
     try {
         const [rows] = await pool.execute('DELETE FROM login_status WHERE username=? AND token=?', [username, token]);
         if (rows.affectedRows === 0) {
             ctx.status = 401;
             ctx.body = {
-                message: '用户或登录信息不存在'
+                message: 'User or login information does not exist'
             };
             return;
         }
         ctx.status = 200;
         ctx.type = 'text/plain';
-        ctx.body = '登出成功';
+        ctx.body = 'Logout successful';
     } catch (err) {
-        logger.error(`logout: 登出失败: ${err.message}`);
+        logger.error(`logout: Logout failed: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

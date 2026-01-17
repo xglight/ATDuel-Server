@@ -15,26 +15,49 @@ async function room(ctx, next) {
             return;
         }
 
-        logger.info(`room: 获取房间信息: ${id}`);
+        logger.info(`room: Fetching room information: ${id}`);
 
-        const team = rows[0].team;
-        const user = rows[0].user;
-        const setting = rows[0].setting;
+        const room = rows[0];
+        // 获取房间成员
+        const [participants] = await pool.query(
+            `SELECT * FROM room_participants WHERE room_id = ?`,
+            [room.id]
+        );
+
+        // 构建前端需要的 team 和 user 格式
+        const team = { A: [], B: [] };
+        const user = {};
+        participants.forEach(p => {
+            team[p.team_label].push(p.username);
+            user[p.username] = {
+                avatar: p.avatar,
+                place: p.place,
+                ready: !!p.ready
+            };
+        });
+
+        const setting = {
+            mode: room.setting_mode,
+            rating_lowest: room.setting_rating_lowest,
+            rating_highest: room.setting_rating_highest,
+            problem_count: room.setting_problem_count
+        };
+
         let result = {
-            id: rows[0].id,
-            url: rows[0].url,
-            master: rows[0].master,
+            id: room.id,
+            url: room.url,
+            master: room.master,
             team,
             user,
             setting,
-            rated: rows[0].rated,
-            last_updated: rows[0].last_updated
+            rated: room.rated,
+            last_updated: room.last_updated
         }
         ctx.status = 200;
         ctx.type = 'text/json';
         ctx.body = result;
     } catch (err) {
-        logger.error(`room: 获取房间信息失败: ${err.message}`);
+        logger.error(`room: Failed to fetch room information: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

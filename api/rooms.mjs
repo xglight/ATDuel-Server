@@ -6,36 +6,51 @@ import logger from '../logger.mjs';
 async function rooms(ctx, next) {
     try {
         const [rows, fields] = await pool.query('SELECT * FROM room');
-        logger.info(`rooms: 获取房间列表: ${rows.length} 个房间`);
-        let result = [];
+        logger.info(`rooms: Fetched room list: ${rows.length} rooms`);
 
+        // 获取所有房间的成员
+        const [allParticipants] = await pool.query('SELECT * FROM room_participants');
+        const participantsMap = {};
+        allParticipants.forEach(p => {
+            if (!participantsMap[p.room_id]) {
+                participantsMap[p.room_id] = { team: { A: [], B: [] }, user: {} };
+            }
+            participantsMap[p.room_id].team[p.team_label].push(p.username);
+            participantsMap[p.room_id].user[p.username] = {
+                avatar: p.avatar,
+                place: p.place,
+                ready: !!p.ready
+            };
+        });
+
+        let result = [];
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            const id = row.id;
-            const url = row.url;
-            const master = row.master;
-            const team = row.team;
-            const user = row.user;
-            const setting = row.setting;
-            const rated = row.rated;
+            const pData = participantsMap[row.id] || { team: { A: [], B: [] }, user: {} };
+
             result.push({
-                id: id,
-                url: url,
-                master: master,
-                team,
-                user,
-                setting,
-                rated: rated
+                id: row.id,
+                url: row.url,
+                master: row.master,
+                team: pData.team,
+                user: pData.user,
+                setting: {
+                    mode: row.setting_mode,
+                    rating_lowest: row.setting_rating_lowest,
+                    rating_highest: row.setting_rating_highest,
+                    problem_count: row.setting_problem_count
+                },
+                rated: row.rated
             });
         }
         try {
             result = JSON.stringify(result);
-        } catch (e) { logger.error(`rooms: 解析 JSON 失败: ${e.message}`) }
+        } catch (e) { logger.error(`rooms: Failed to parse JSON: ${e.message}`) }
         ctx.type = 'text/json';
         ctx.status = 200;
         ctx.body = result;
     } catch (err) {
-        logger.error(`rooms: 获取房间列表失败: ${err.message}`);
+        logger.error(`rooms: Failed to fetch room list: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

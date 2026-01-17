@@ -2,6 +2,7 @@
 
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import config from '../config.mjs';
 
 
 function randomString(length) {
@@ -21,11 +22,11 @@ async function createRoom(ctx, next) {
         // 参数验证
         if (!body.username || !body.token) {
             ctx.status = 400;
-            ctx.body = { success: false, message: '缺少必要参数' };
+            ctx.body = { success: false, message: 'Missing required parameters' };
             return;
         }
 
-        logger.debug(`room_create: 创建房间, 主用户 ${body.username}`);
+        logger.debug(`room_create: Creating room, master user ${body.username}`);
 
         const roomUrl = randomString(20);
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -33,17 +34,10 @@ async function createRoom(ctx, next) {
         const roomData = {
             url: roomUrl,
             master: body.username,
-            team: JSON.stringify({
-                A: [],
-                B: []
-            }),
-            user: JSON.stringify({}),
-            setting: JSON.stringify({
-                mode: body.playerCount || '1v1',
-                rating_lowest: body.ratingMin || 0,
-                rating_highest: body.ratingMax || 3000,
-                problem_count: body.problemCount || 1,
-            }),
+            setting_mode: body.playerCount || '1v1',
+            setting_rating_lowest: body.ratingMin || 0,
+            setting_rating_highest: body.ratingMax || 4000,
+            setting_problem_count: body.problemCount || config.content.problemCountLowerLimit,
             rated: body.isRated || false,
         };
 
@@ -53,7 +47,7 @@ async function createRoom(ctx, next) {
             [roomData]
         );
 
-        logger.info(`room_create: 创建房间成功, 房间 URL ${roomUrl}`);
+        logger.info(`room_create: Room created successfully, URL ${roomUrl}`);
         // 返回成功响应
         ctx.status = 200;
         ctx.body = {
@@ -62,11 +56,11 @@ async function createRoom(ctx, next) {
         };
 
     } catch (err) {
-        logger.error(`room_create: 创建房间失败: ${err.message}`);
+        logger.error(`room_create: Failed to create room: ${err.message}`);
         ctx.status = 500;
         ctx.body = {
             success: false,
-            message: '服务器错误',
+            message: 'Internal Server Error',
             error: err.message
         };
     }

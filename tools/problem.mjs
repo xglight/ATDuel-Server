@@ -4,7 +4,7 @@ import axios from 'axios';
 import logger from '../logger.mjs';
 
 async function getProblem(url) {
-    logger.info("获取数据:", url);
+    logger.info("Fetching data:", url);
     try {
         const response = await axios.get(url, {
             headers: {
@@ -22,24 +22,24 @@ async function getProblem(url) {
             const [rows] = await pool.execute('SELECT id FROM problem WHERE id = ?', [id]);
             const difficulty = problem.rating == null ? -1 : problem.rating;
             if (rows.length > 0) {
-                logger.info("数据已存在，更新难度:", id, difficulty);
+                logger.info("Data already exists, updating difficulty:", id, difficulty);
                 await pool.execute('UPDATE problem SET difficulty = ? WHERE id = ?', [difficulty, id]);
                 continue;
             }
             const problemurl = problem.url;
             const title = problemurl.split('/').pop() + ' - ' + problem.name;
-            logger.info("插入数据:", id, difficulty, problemurl, title);
+            logger.info("Inserting data:", id, difficulty, problemurl, title);
             try {
                 await pool.execute(
                     'INSERT INTO problem (id, difficulty, url, title) VALUES (?,?,?,?)'
                     , [id, difficulty, problemurl, title]);
             } catch (error) {
-                logger.error('插入数据失败:', error);
+                logger.error('Failed to insert data:', error);
             }
         }
         return new_url;
     } catch (error) {
-        logger.error('API请求失败:', {
+        logger.error('API request failed:', {
             status: error.response?.status,
             data: error.response?.data,
             message: error.message
@@ -69,10 +69,10 @@ async function main() {
             url = "https://clist.by" + new_url;
             cnt++;
             total++;
-            logger.info("已获取:", total, "次");
+            logger.info("Fetched:", total, "times");
         }
         catch (error) {
-            logger.error('获取失败:', error);
+            logger.error('Fetch failed:', error);
             break;
         }
     }

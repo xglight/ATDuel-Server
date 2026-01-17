@@ -12,7 +12,7 @@ async function atRating(ctx, next) {
         return;
     }
     const url = 'https://atcoder.jp/users/' + username;
-    logger.debug('atRating: 请求ATRating: ', url);
+    logger.debug('atRating: Requesting ATRating: ', url);
     try {
         const data = await new Promise((resolve, reject) => {
             https.get(url, (res) => {
@@ -24,7 +24,7 @@ async function atRating(ctx, next) {
                     resolve(data);
                 });
             }).on('error', (error) => {
-                logger.error('atRating: 网络错误: ', error);
+                logger.error('atRating: Network error: ', error);
                 reject(error);
             });
         });
@@ -48,7 +48,7 @@ async function atRating(ctx, next) {
             ctx.body = rating;
         }
     } catch (error) {
-        logger.error('atRating: 处理出错: ', error);
+        logger.error('atRating: Processing error: ', error);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

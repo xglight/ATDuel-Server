@@ -14,7 +14,7 @@ async function check(ctx, next) {
 
     const url = 'https://atcoder.jp/users/' + username;
 
-    logger.debug('check: 注册 token 检查: ', username);
+    logger.debug('check: Registration token check: ', username);
 
     ctx.type = 'text/plain';
     try {

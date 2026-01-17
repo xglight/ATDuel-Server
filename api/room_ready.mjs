@@ -3,81 +3,102 @@ import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
 
+/**
+ * 处理房间准备状态更新
+ * @param {object} ctx - Koa 上下文对象
+ * @param {function} next - 下一个中间件函数
+ */
 async function room_ready(ctx, next) {
     const { room_id, team, position, ready } = ctx.request.body;
 
     // 参数校验
     if (!room_id || !team || position === undefined || ready === undefined) {
         ctx.status = 400;
-        ctx.body = { success: false, error: '参数不完整' };
+        ctx.body = { success: false, error: 'Incomplete parameters' };
         return;
     }
 
-    logger.debug(`room_ready: 更新房间准备状态, 房间 ID ${room_id}, 队伍 ${team}, 位置 ${position}, 准备状态 ${ready}`);
+    logger.debug(`room_ready: Updating room ready status, Room ID ${room_id}, team ${team}, position ${position}, ready status ${ready}`);
 
+    const conn = await pool.getConnection();
     try {
-        // 获取房间数据
-        const [roomRows] = await pool.query('SELECT * FROM room WHERE url = ?', [room_id]);
+        await conn.beginTransaction();
+
+        // 获取房间数据并加锁
+        const [roomRows] = await conn.query('SELECT * FROM room WHERE url = ? FOR UPDATE', [room_id]);
         if (roomRows.length === 0) {
             ctx.status = 404;
-            ctx.body = { success: false, error: '房间不存在' };
+            ctx.body = { success: false, error: 'Room does not exist' };
+            await conn.rollback();
             return;
         }
 
         const room = roomRows[0];
-        let teamData;
-        let userData;
-        try {
-            teamData = typeof room.team === 'string' ? JSON.parse(room.team) : room.team;
-            userData = typeof room.user === 'string' ? JSON.parse(room.user) : room.user;
-            if (!teamData || typeof teamData !== 'object') {
-                teamData = { A: [], B: [] };
-            }
-            if (!userData || typeof userData !== 'object') {
-                userData = {};
-            }
-        } catch (e) {
-            logger.error(`room_ready: 解析数据失败: ${e.message}`);
-            teamData = { A: [], B: [] };
-            userData = {};
-        }
+
+        // 获取房间成员
+        const [participants] = await conn.query(
+            `SELECT * FROM room_participants WHERE room_id = ?`,
+            [room.id]
+        );
+
+        // 构建前端需要的格式
+        const teamData = { A: [], B: [] };
+        const userData = {};
+        participants.forEach(p => {
+            teamData[p.team_label].push(p.username);
+            userData[p.username] = {
+                avatar: p.avatar,
+                place: p.place,
+                ready: !!p.ready
+            };
+        });
 
         // 查找该位置的用户
-        let username;
-        if (teamData && teamData[team]) {
-            username = teamData[team].find(name => userData[name] && userData[name].place === position);
-        }
+        const participant = participants.find(p => p.team_label === team && p.place === position);
 
-        if (!username) {
+        if (!participant) {
             ctx.status = 404;
-            ctx.body = { success: false, error: '位置无用户' };
+            ctx.body = { success: false, error: 'No user at this position' };
+            await conn.rollback();
             return;
         }
 
-        // 更新准备状态 (新版结构)
-        if (userData[username] && !Array.isArray(userData[username])) {
-            userData[username].ready = ready;
-        }
-
-        // 更新数据库
-        await pool.query(
-            'UPDATE room SET user = ? WHERE url = ?',
-            [JSON.stringify(userData), room_id]
+        // 更新准备状态
+        await conn.query(
+            'UPDATE room_participants SET ready = ? WHERE id = ?',
+            [ready ? 1 : 0, participant.id]
         );
 
-        // 获取更新后的完整房间数据
-        const [updatedRoom] = await pool.query(
-            'SELECT * FROM room WHERE url = ?',
-            [room_id]
+        // 更新房间更新时间
+        await conn.query(
+            'UPDATE room SET last_updated = NOW() WHERE id = ?',
+            [room.id]
         );
+
+        // 获取更新后的房间信息用于广播
+        const [updatedRoom] = await conn.query(
+            'SELECT * FROM room WHERE id = ?',
+            [room.id]
+        );
+
+        await conn.commit();
+
+        // 更新本地副本用于返回
+        userData[participant.username].ready = ready;
 
         // 返回更新后的房间数据
         ctx.body = {
             success: true,
             teamData,
             userData,
-            setting: safeParseJSON(room.setting, {}),
-            rated: room.rated
+            setting: {
+                mode: room.setting_mode,
+                rating_lowest: room.setting_rating_lowest,
+                rating_highest: room.setting_rating_highest,
+                problem_count: room.setting_problem_count
+            },
+            rated: room.rated,
+            last_updated: updatedRoom.length > 0 ? updatedRoom[0].last_updated : null
         };
 
         // 广播准备状态更新
@@ -89,11 +110,15 @@ async function room_ready(ctx, next) {
                 fullUpdate: true
             });
         }
+
     } catch (err) {
-        logger.error(`room_ready: 更新房间准备状态失败: ${err.message}`);
+        logger.error(`room_ready: Failed to update room ready status: ${err.message}`);
+        if (conn) await conn.rollback();
         ctx.status = 500;
-        ctx.body = { success: false, error: '服务器错误' };
+        ctx.body = { success: false, error: 'Server Error' };
         return;
+    } finally {
+        if (conn) conn.release();
     }
 }
 
@@ -106,7 +131,7 @@ function safeParseJSON(jsonStr, defaultValue = {}) {
         }
         return defaultValue;
     } catch (e) {
-        logger.error(`room_ready: 解析JSON失败: ${e.message}`);
+        logger.error(`room_ready: Failed to parse JSON: ${e.message}`);
         return defaultValue;
     }
 }

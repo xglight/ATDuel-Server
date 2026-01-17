@@ -9,35 +9,34 @@ async function submission(ctx, next) {
 
     if (!contestId) {
         ctx.status = 400;
-        ctx.body = { error: '参数错误' };
+        ctx.body = { error: 'Invalid parameters' };
         return;
     }
     const [rows] = await pool.execute('SELECT * FROM contest WHERE url =?', [contestId]);
     if (rows.length == 0) {
         ctx.status = 404;
-        ctx.body = { error: '没有找到该比赛' };
+        ctx.body = { error: 'Contest not found' };
         return;
     }
-    logger.info(`submission: 获取提交记录: ${contestId}`);
+    logger.info(`submission: Fetching submissions for contest: ${contestId}`);
     try {
-        if (rows[0].submission == null) {
-            ctx.status = 200;
-            ctx.body = { data: [], total: 0 };
-            return;
-        }
-
-        let submissions = rows[0].submission;
-        // 使用Date对象进行更精确的时间比较
-        submissions.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-        const total = submissions.length;
+        const contest = rows[0];
         const offset = (page - 1) * pageSize;
-        const data = submissions.slice(offset, offset + parseInt(pageSize));
+
+        // 获取总数
+        const [totalRows] = await pool.query('SELECT COUNT(*) as total FROM contest_submissions WHERE contest_id = ?', [contest.id]);
+        const total = totalRows[0].total;
+
+        // 获取分页数据
+        const [submissions] = await pool.query(
+            'SELECT username, task_title as task, status, submission_time as time FROM contest_submissions WHERE contest_id = ? ORDER BY submission_time DESC LIMIT ? OFFSET ?',
+            [contest.id, parseInt(pageSize), offset]
+        );
 
         ctx.status = 200;
-        ctx.body = { data, total };
+        ctx.body = { data: submissions, total };
     } catch (err) {
-        logger.error(`submission: 获取提交记录失败: ${err.message}`);
+        logger.error(`submission: Failed to fetch submissions: ${err.message}`);
         ctx.status = 500;
         ctx.body = [];
     }

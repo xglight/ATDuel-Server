@@ -6,55 +6,84 @@ import logger from '../logger.mjs';
 async function contests(ctx, next) {
     try {
         const [rows, fields] = await pool.query('SELECT * FROM contest');
-        logger.debug(`contests: 查询所有比赛: 共 ${rows.length} 条记录`);
-        rows.sort((a, b) => {
-            if (a.status < b.status) {
-                return -1;
-            } else if (a.status > b.status) {
-                return 1;
-            } else {
-                return b.id - a.id;
-            }
+        logger.debug(`contests: Fetching all contests: Total ${rows.length} records`);
+
+        if (rows.length === 0) {
+            ctx.body = { success: true, contests: [] };
+            return;
+        }
+
+        // 获取所有比赛的相关信息
+        const [allTeams] = await pool.query('SELECT * FROM contest_teams');
+        const [allParticipants] = await pool.query('SELECT * FROM contest_participants');
+        const [allProblems] = await pool.query('SELECT * FROM contest_problems');
+        const [allRatings] = await pool.query('SELECT * FROM contest_ratings');
+
+        const teamsMap = {};
+        allTeams.forEach(t => {
+            if (!teamsMap[t.contest_id]) teamsMap[t.contest_id] = { A: [], B: [] };
+            teamsMap[t.contest_id][t.team_label].push(t.username);
         });
 
-        let result = [];
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const id = row.id;
-            const url = row.url;
-            const starttime = row.startTime;
-            const endtime = row.endTime;
-            const team = row.team;
-            const user = row.user;
-            const rating = row.Rating;
-            const problem = row.problem;
-            const status = row.status;
-            const rated = row.rated;
-            const scorea = row.scorea;
-            const scoreb = row.scoreb;
-            result.push({
-                id: id,
-                url: url,
-                startTime: starttime,
-                endTime: endtime,
-                team,
-                user,
-                rating,
-                problem,
-                scorea: scorea,
-                scoreb: scoreb,
-                status: status,
-                rated: rated
+        const participantsMap = {};
+        allParticipants.forEach(p => {
+            if (!participantsMap[p.contest_id]) participantsMap[p.contest_id] = {};
+            participantsMap[p.contest_id][p.username] = {
+                score: p.score,
+                place: p.place,
+                avatar: p.avatar
+            };
+        });
+
+        const problemsMap = {};
+        allProblems.forEach(p => {
+            if (!problemsMap[p.contest_id]) problemsMap[p.contest_id] = [];
+            problemsMap[p.contest_id].push({
+                id: p.problem_id,
+                title: p.title,
+                url: p.url,
+                score: p.score,
+                status: p.status,
+                difficulty: p.difficulty
             });
-        }
-        try {
-            result = JSON.stringify(result);
-        } catch (e) { logger.error(`contests: 解析 JSON 失败: ${e.message}`) }
+        });
+
+        const ratingsMap = {};
+        allRatings.forEach(r => {
+            if (!ratingsMap[r.contest_id]) ratingsMap[r.contest_id] = {};
+            ratingsMap[r.contest_id][r.username] = {
+                oldRating: r.old_rating,
+                newRating: r.new_rating,
+                delta: r.delta
+            };
+        });
+
+        rows.sort((a, b) => {
+            if (a.status < b.status) return -1;
+            if (a.status > b.status) return 1;
+            return b.id - a.id;
+        });
+
+        const result = rows.map(row => ({
+            id: row.id,
+            url: row.url,
+            startTime: row.startTime,
+            endTime: row.endTime,
+            team: teamsMap[row.id] || { A: [], B: [] },
+            user: participantsMap[row.id] || {},
+            rating: ratingsMap[row.id] || {},
+            problem: problemsMap[row.id] || [],
+            scorea: row.scorea,
+            scoreb: row.scoreb,
+            status: row.status,
+            rated: row.rated
+        }));
+
         ctx.type = 'text/json';
         ctx.status = 200;
         ctx.body = result;
     } catch (err) {
-        logger.error(`contests: 查询所有比赛失败: ${err.message}`);
+        logger.error(`contests: Failed to fetch all contests: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

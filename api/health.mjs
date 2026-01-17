@@ -2,7 +2,7 @@ import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
 async function health(ctx, next) {
-    logger.debug(`health: 检查服务健康状态`);
+    logger.debug(`health: Checking service health status`);
 
     const uptime = process.uptime();
     const timestamp = new Date().toISOString();

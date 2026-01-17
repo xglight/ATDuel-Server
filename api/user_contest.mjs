@@ -11,54 +11,52 @@ async function user_contest(ctx, next) {
         return;
     }
 
-    logger.info(`user_contest: 获取用户 ${username} 的比赛记录`);
+    logger.info(`user_contest: Fetching contest history for user ${username}`);
     try {
-        const contestid = await fetch(config.buildApiUrl(`/user_contestid/${username}`), { method: 'GET' }).then(response => response.json());
-        if (contestid.user_contest == null) {
+        const [historyRows] = await pool.query('SELECT contest_id FROM user_contest_history WHERE username = ?', [username]);
+        if (historyRows.length === 0) {
             ctx.status = 200;
-            ctx.type = 'text/json';
-            ctx.body = {};
+            ctx.type = 'application/json';
+            ctx.body = [];
             return;
         }
-        let data = [];
-        for (let i = 0; i < contestid.user_contest.length; i++) {
-            let id = contestid.user_contest[i];
-            try {
-                const [rows, fields] = await pool.execute('SELECT * FROM contest WHERE id =?', [id]);
-                if (rows.length === 0) {
-                    ctx.status = 200;
-                    ctx.type = 'text/json';
-                    ctx.body = {};
-                    return;
-                }
-                const starttime = rows[0].starttime;
-                const endtime = rows[0].endtime;
-                const user = rows[0].user;
-                const rating = rows[0].rating;
-                const problem = rows[0].problem;
-                const status = rows[0].status;
-                data.push({
-                    id: id,
-                    startTime: starttime,
-                    endTime: endtime,
-                    user,
-                    rating,
-                    problem,
-                    status: status
-                });
-            } catch (err) {
-                logger.error(`user_contest: JSON 解析失败: ${err.message}`);
-                ctx.status = 500;
-                ctx.type = 'text/plain';
-                ctx.body = 'Server Error';
-                return;
-            }
+
+        const contestIds = historyRows.map(r => r.contest_id);
+        const [contests] = await pool.query('SELECT * FROM contest WHERE id IN (?) ORDER BY startTime DESC', [contestIds]);
+
+        const data = [];
+        for (const contest of contests) {
+            // 获取比赛关联数据
+            const [participants] = await pool.query('SELECT * FROM contest_participants WHERE contest_id = ?', [contest.id]);
+            const [problems] = await pool.query('SELECT * FROM contest_problems WHERE contest_id = ?', [contest.id]);
+            const [ratings] = await pool.query('SELECT * FROM contest_ratings WHERE contest_id = ?', [contest.id]);
+
+            const userMap = {};
+            participants.forEach(p => userMap[p.username] = p);
+
+            const ratingMap = {};
+            ratings.forEach(r => ratingMap[r.username] = {
+                oldRating: r.old_rating,
+                newRating: r.new_rating,
+                delta: r.delta
+            });
+
+            data.push({
+                id: contest.id,
+                startTime: contest.startTime,
+                endTime: contest.endTime,
+                user: userMap,
+                rating: ratingMap,
+                problem: problems,
+                status: contest.status
+            });
         }
+
         ctx.status = 200;
-        ctx.type = 'text/json';
+        ctx.type = 'application/json';
         ctx.body = data;
     } catch (err) {
-        logger.error(`user_contest: 获取用户 ${username} 的比赛记录失败: ${err.message}`);
+        logger.error(`user_contest: Failed to fetch contest history for user ${username}: ${err.message}`);
         ctx.status = 500;
         ctx.type = 'text/plain';
         ctx.body = 'Server Error';

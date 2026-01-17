@@ -2,19 +2,34 @@ import pool from './db.mjs';
 import Koa from 'koa';
 import bodyParser from '@koa/bodyparser';
 import cors from '@koa/cors';
+import serve from 'koa-static';
+import mount from 'koa-mount';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import apiControl from './import_api.mjs';
 import logger from './logger.mjs';
+import config from './config.mjs';
 import { WebSocketServer, WebSocket } from 'ws';
+import clientRoutes from '../ATDuel-Client/source/load.mjs';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = new Koa();
-const port = 3000;
+const port = config.server.port;
 
 // 创建WebSocket服务器
 const wss = new WebSocketServer({ noServer: true });
 const roomClients = new Map(); // roomId -> Set of clients
 const contestClients = new Map(); // contestId -> Set of clients
 
-// 存储消息到数据库
+/**
+ * 存储消息到数据库
+ * @param {string} type 消息类型
+ * @param {string} contestId 比赛ID
+ * @param {string} teamId 队伍ID
+ * @param {string} sender 发送者
+ * @param {string} message 消息内容
+ * @param {string} mode 发送模式 (all/team)
+ */
 async function storeMessage(type, contestId, teamId, sender, message, mode) {
     await pool.query(
         'INSERT INTO contest_messages (type, contest_id, team_id, sender, message, mode) VALUES (?,?,?,?,?,?)',
@@ -22,7 +37,11 @@ async function storeMessage(type, contestId, teamId, sender, message, mode) {
     );
 }
 
-// 获取房间历史消息
+/**
+ * 获取房间历史消息
+ * @param {string} contestId 比赛ID
+ * @returns {Promise<Array|null>} 历史消息列表
+ */
 async function getContestMessage(contestId) {
     let result;
     [result] = await pool.query(
@@ -59,11 +78,11 @@ function broadcastToRoom(roomId, message) {
                 try {
                     client.send(data, (err) => {
                         if (err) {
-                            logger.error(`ws: 房间 ${roomId} 广播消息失败:`, err);
+                            logger.error(`ws: Room ${roomId} broadcast failed:`, err);
                         }
                     });
                 } catch (err) {
-                    logger.error(`ws: 房间 ${roomId} 广播异常:`, err);
+                    logger.error(`ws: Room ${roomId} broadcast exception:`, err);
                 }
             }
         });
@@ -84,17 +103,20 @@ function broadcastToContest(contestId, message) {
                 try {
                     client.send(data, (err) => {
                         if (err) {
-                            logger.error(`ws: 比赛 ${contestId} 广播消息失败:`, err);
+                            logger.error(`ws: Contest ${contestId} broadcast failed:`, err);
                         }
                     });
                 } catch (err) {
-                    logger.error(`ws: 比赛 ${contestId} 广播异常:`, err);
+                    logger.error(`ws: Contest ${contestId} broadcast exception:`, err);
                 }
             }
         });
     }
 }
 
+/**
+ * 主函数，启动服务器
+ */
 async function main() {
     // 中间件顺序很重要
     app.use(bodyParser());
@@ -104,11 +126,9 @@ async function main() {
         allowHeaders: ['*'],
     }));
 
-    // 路由和错误处理（添加API前缀）
-    const router = await apiControl(app, 'api', '/api');
-
-    // 使用路由中间件
-    app.use(router);
+    // API 路由 (后端)
+    const apiRouter = await apiControl(app, 'api', '/api');
+    app.use(apiRouter);
 
     // 错误处理
     app.on('error', (err, ctx) => {
@@ -116,9 +136,9 @@ async function main() {
     });
 
     const server = app.listen(port, () => {
-        logger.info(`server: 服务器运行在 http://localhost:${port}`);
+        logger.info(`server: Server running at http://localhost:${port}`);
     }).on('error', err => {
-        logger.fatal('server: 服务器启动出错: ', err.stack);
+        logger.fatal('server: Server startup error: ', err.stack);
         process.exit(1);
     });
 
@@ -153,7 +173,7 @@ async function main() {
                         roomClients.set(roomId, new Set());
                     }
                     roomClients.get(roomId).add(ws);
-                    logger.debug(`ws: 客户端 ${ws._socket.remoteAddress} 加入房间 ${roomId}`);
+                    logger.debug(`ws: Client ${ws._socket.remoteAddress} joined room ${roomId}`);
                     ws.roomId = roomId;
                 }
                 else if (data.type === 'join_contest' && data.contestId) {
@@ -164,7 +184,7 @@ async function main() {
                     }
                     contestClients.get(contestId).add(ws);
                     ws.contestId = contestId;
-                    logger.debug(`ws: 客户端 ${ws._socket.remoteAddress} 加入比赛 ${contestId}`);
+                    logger.debug(`ws: Client ${ws._socket.remoteAddress} joined contest ${contestId}`);
                     ws.teamId = data.teamId; // 保存队伍ID
 
                     // 发送历史消息
@@ -184,7 +204,7 @@ async function main() {
                                             message: msg.message,
                                             timestamp: msg.timestamp
                                         }), (err) => {
-                                            if (err) logger.error('ws: 发送历史系统消息失败:', err);
+                                            if (err) logger.error('ws: Failed to send historical system messages:', err);
                                         });
                                     } else {
                                         ws.send(JSON.stringify({
@@ -195,24 +215,24 @@ async function main() {
                                             teamId: msg.teamId || null,
                                             timestamp: msg.timestamp
                                         }), (err) => {
-                                            if (err) logger.error('ws: 发送历史聊天消息失败:', err);
+                                            if (err) logger.error('ws: Failed to send historical chat messages:', err);
                                         });
                                     }
                                 } catch (err) {
-                                    logger.error('ws: 发送历史消息异常:', err);
+                                    logger.error('ws: Exception while sending historical messages:', err);
                                 }
                             });
                         }
                     } catch (error) {
-                        logger.error('ws: 获取历史消息失败: ', error);
+                        logger.error('ws: Failed to fetch historical messages: ', error);
                     }
                 } else if (data.type === 'chat_message') {
                     // 输入验证
                     if (!data.contestId || !data.sender || !data.message || !data.mode) {
-                        logger.warn('ws: 无效的聊天消息: ', data);
+                        logger.warn('ws: Invalid chat message: ', data);
                         return;
                     }
-                    logger.debug(`ws: 收到聊天消息: ${data.message} 用户: ${data.sender} 模式: ${data.mode}`);
+                    logger.debug(`ws: Received chat message: ${data.message} User: ${data.sender} Mode: ${data.mode}`);
                     try {
                         // 存储消息
                         await storeMessage(
@@ -224,7 +244,7 @@ async function main() {
                             data.mode
                         );
                     } catch (error) {
-                        logger.error('ws: 存储消息失败: ', error);
+                        logger.error('ws: Failed to store message: ', error);
                     }
 
                     if (data.mode === 'all') {
@@ -253,11 +273,11 @@ async function main() {
                                     try {
                                         client.send(teamData, (err) => {
                                             if (err) {
-                                                logger.error(`ws: 队伍 ${ws.teamId} 消息发送失败:`, err);
+                                                logger.error(`ws: Team ${ws.teamId} message delivery failed:`, err);
                                             }
                                         });
                                     } catch (err) {
-                                        logger.error(`ws: 队伍 ${ws.teamId} 消息发送异常:`, err);
+                                        logger.error(`ws: Team ${ws.teamId} message delivery exception:`, err);
                                     }
                                 }
                             });
@@ -266,10 +286,10 @@ async function main() {
                 } else if (data.type === 'system_message') {
                     // 系统消息处理
                     if (!data.contestId || !data.message) {
-                        logger.warn('ws: 无效的系统消息: ', data);
+                        logger.warn('ws: Invalid system message: ', data);
                         return;
                     }
-                    logger.debug(`ws: 收到系统消息: ${data.message} 比赛: ${data.contestId}`);
+                    logger.debug(`ws: Received system message: ${data.message} Contest: ${data.contestId}`);
                     try {
                         // 存储系统消息
                         await storeMessage(
@@ -288,11 +308,11 @@ async function main() {
                             timestamp: new Date().toISOString()
                         });
                     } catch (error) {
-                        logger.error('ws: 处理系统消息失败: ', error);
+                        logger.error('ws: Failed to process system message: ', error);
                     }
                 }
             } catch (error) {
-                logger.error('ws: WebSocket 消息出错: ', error);
+                logger.error('ws: WebSocket message error: ', error);
             }
         });
 
@@ -320,17 +340,17 @@ async function main() {
 
     // 监听进程关闭信号
     process.on('SIGINT', async () => {
-        logger.info('server: 服务器正在关闭...');
+        logger.info('server: Server is shutting down...');
         try {
-            server.close(() => logger.info('server: Koa 服务器已关闭'));
+            server.close(() => logger.info('server: Koa server closed'));
             if (pool) {
                 await pool.end();
-                logger.info('server: 数据库连接池已关闭');
+                logger.info('server: Database connection pool closed');
             }
         } catch (err) {
-            logger.fatal('server: 关闭资源时出错: ', err.stack);
+            logger.fatal('server: Error while closing resources: ', err.stack);
         } finally {
-            logger.info('server: 服务器已关闭');
+            logger.info('server: Server closed');
             process.exit(0);
         }
     });

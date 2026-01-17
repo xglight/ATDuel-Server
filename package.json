@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "nodemon server.mjs"
+    "dev": "nodemon server.mjs",
+    "init": "node tools/cli.mjs init",
+    "cli": "node tools/cli.mjs"
   },
   "dependencies": {
     "@koa/bodyparser": "^5.1.1",
@@ -15,6 +17,7 @@
     "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
     "cheerio": "^1.0.0",
+    "dotenv": "^17.2.3",
     "koa": "^2.16.0",
     "koa-mount": "^4.0.0",
     "koa-router": "^13.0.1",

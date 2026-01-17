@@ -12,7 +12,7 @@ async function atavatar(ctx, next) {
     }
     const url = 'https://atcoder.jp/users/' + username;
 
-    logger.debug('atavatar: 请求头像: ', url);
+    logger.debug('atavatar: Requesting avatar: ', url);
 
     ctx.type = 'text/plain';
 
@@ -27,7 +27,7 @@ async function atavatar(ctx, next) {
                     resolve(data);
                 });
             }).on('error', (error) => {
-                logger.error('atavatar: 网络错误: ', error);
+                logger.error('atavatar: Network error: ', error);
                 reject(error);
             });
         });
@@ -44,7 +44,7 @@ async function atavatar(ctx, next) {
             ctx.body = img;
         }
     } catch (error) {
-        logger.error('atavatar: 处理出错: ', error);
+        logger.error('atavatar: Processing error: ', error);
         ctx.status = 500;
         ctx.body = 'Server Error';
     }

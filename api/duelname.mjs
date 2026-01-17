@@ -13,7 +13,7 @@ async function duelname(ctx, next) {
         return;
     }
 
-    logger.debug(`duelname: 查询用户名: ${username}`);
+    logger.debug(`duelname: Querying username: ${username}`);
 
     try {
         const [result] = await pool.query('SELECT * FROM user WHERE ATName = ?', [username]);
@@ -26,7 +26,7 @@ async function duelname(ctx, next) {
             ctx.body = result[0].username;
         }
     } catch (err) {
-        logger.error(`duelname: 查询用户名失败: ${err.message}`);
+        logger.error(`duelname: Failed to query username: ${err.message}`);
         ctx.status = 500;
         ctx.body = { message: 'Internal server error' };
     }

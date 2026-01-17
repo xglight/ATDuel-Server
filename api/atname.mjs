@@ -12,7 +12,7 @@ async function atname(ctx, next) {
         return;
     }
 
-    logger.debug('atname: 请求ATName: ', username);
+    logger.debug('atname: Requesting ATName: ', username);
 
     try {
         const [result] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
@@ -25,7 +25,7 @@ async function atname(ctx, next) {
             ctx.body = result[0].ATName;
         }
     } catch (err) {
-        logger.error('atname: 处理出错: ', err);
+        logger.error('atname: Processing error: ', err);
         ctx.status = 500;
         ctx.body = { message: 'Internal server error' };
     }

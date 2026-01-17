@@ -10,13 +10,13 @@ async function rating(ctx, next) {
         return;
     }
 
-    logger.debug(`rating: 查询用户 ${username} 的 rating`);
+    logger.debug(`rating: Querying rating for user ${username}`);
     try {
         const [rows, fields] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
 
         if (rows.length === 0) {
             ctx.status = 404;
-            ctx.body = { error: '用户不存在' };
+            ctx.body = { error: 'User not found' };
             return;
         }
 
@@ -26,7 +26,7 @@ async function rating(ctx, next) {
         ctx.type = "text/plain"
         ctx.body = rating;
     } catch (err) {
-        logger.error(`rating: 查询用户 ${username} 的 rating 失败: ${err.message}`);
+        logger.error(`rating: Failed to query rating for user ${username}: ${err.message}`);
         ctx.status = 500;
         ctx.type = "text/plain"
         ctx.body = 'Server Error';

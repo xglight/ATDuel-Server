@@ -10,7 +10,7 @@ async function avatar(ctx, next) {
         return;
     }
     ctx.type = "text/plain"
-    logger.debug('avatar: 请求用户头像: ', username);
+    logger.debug('avatar: Requesting user avatar: ', username);
     try {
         const [rows, fields] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
 
@@ -23,7 +23,7 @@ async function avatar(ctx, next) {
         ctx.status = 200;
         ctx.body = avatarPath;
     } catch (err) {
-        logger.error('avatar: 处理出错: ', err);
+        logger.error('avatar: Processing error: ', err);
         ctx.status = 500;
         ctx.body = 'Server Error';
         return;
