@@ -24,7 +24,8 @@ async function processTeamSubmissions(team, problemName, subdata, startTime) {
                 },
                 body: JSON.stringify({
                     username: ATName,
-                    task: problemName
+                    problem_id: problemName,
+                    startTime: startTime
                 })
             });
             const data = await res.json();
@@ -68,8 +69,13 @@ async function processTeamSubmissions(team, problemName, subdata, startTime) {
  */
 async function submission_update(ctx, next) {
     try {
-        const { problemName, contestId } = ctx.request.body;
-
+        const { problemTitle, contestId } = ctx.request.body;
+        if (!problemTitle || !contestId) {
+            ctx.status = 200;
+            ctx.body = { success: false, error: 'Invalid parameters' };
+            return;
+        }
+        const problemName = problemTitle.split('-')[0].trim();
         // 获取当前比赛数据
         const [contestRows] = await pool.query('SELECT * FROM contest WHERE url = ?', [contestId]);
         if (!contestRows.length) {

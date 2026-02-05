@@ -52,8 +52,8 @@ async function contest_ac(ctx, next) {
 
                     // 更新题目状态
                     await pool.query(
-                        'UPDATE contest_problems SET status = 1 WHERE id = ?',
-                        [problems[i].id]
+                        'UPDATE contest_problems SET status = 1, acuser = ? WHERE contest_id = ? AND problem_id = ?',
+                        [username, contest.id, problems[i].problem_id]
                     );
 
                     updated = true;

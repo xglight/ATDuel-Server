@@ -44,7 +44,8 @@ async function contests(ctx, next) {
                 url: p.url,
                 score: p.score,
                 status: p.status,
-                difficulty: p.difficulty
+                difficulty: p.difficulty,
+                acuser: p.acuser
             });
         });
 

@@ -9,6 +9,7 @@ export const tableDefinitions = {
             username VARCHAR(255) NOT NULL UNIQUE,
             password VARCHAR(255) NOT NULL,
             ATName VARCHAR(255),
+            acLastUpdate BIGINT DEFAULT 0,
             rating INT DEFAULT 0,
             avatar VARCHAR(255)
         )`,
@@ -20,9 +21,18 @@ export const tableDefinitions = {
             INDEX idx_username (username),
             INDEX idx_contest_id (contest_id)
         )`,
+    user_problem_accept: `
+        CREATE TABLE IF NOT EXISTS user_problem_accept (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) NOT NULL,
+            problem_id VARCHAR(255) NOT NULL,
+            INDEX idx_username (username),
+            INDEX idx_problem_id (problem_id)
+        )`,
     problem: `
         CREATE TABLE IF NOT EXISTS problem (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            problem_id VARCHAR(255) NOT NULL,
             title VARCHAR(255) NOT NULL,
             url VARCHAR(255) NOT NULL,
             difficulty INT NOT NULL
@@ -68,6 +78,7 @@ export const tableDefinitions = {
             score INT DEFAULT 0,
             status INT DEFAULT 0,
             difficulty INT DEFAULT 0,
+            acuser VARCHAR(255),
             INDEX idx_contest_id (contest_id)
         )`,
     contest_submissions: `

@@ -2,7 +2,82 @@
 import pool from '../db.mjs';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
+import { updateUserAC } from './user_ac_update.mjs';
 
+/**
+ * 获取房间内所有人 AC 过的题目集合
+ * @param {string[]} usernames 用户名数组
+ * @returns {Promise<Set<string>>} AC 过的题目 ID 集合
+ */
+async function getAcceptedProblems(usernames) {
+    if (!usernames || usernames.length === 0) return new Set();
+    try {
+        const [rows] = await pool.query(
+            'SELECT DISTINCT problem_id FROM user_problem_accept WHERE username IN (?)',
+            [usernames]
+        );
+        return new Set(rows.map(row => row.problem_id));
+    } catch (err) {
+        logger.error(`getAcceptedProblems: Failed to fetch AC records: ${err.message}`);
+        return new Set();
+    }
+}
+
+/**
+ * 选择比赛题目，确保在难度区间内均匀分布
+ * @param {Array} filteredProblems 已经预筛选（排除 AC 和 AHC）的候选题目列表
+ * @param {number} count 需要选择的题目数量
+ * @param {number} min 最低难度
+ * @param {number} max 最高难度
+ * @returns {Promise<Array>} 选择的题目列表
+ */
+async function selectProblems(filteredProblems, count, min, max) {
+    const result = [];
+    const usedUrls = new Set();
+
+    logger.debug(`selectProblems: Selecting ${count} problems from ${filteredProblems.length} candidates in range [${min}, ${max}]`);
+
+    for (let i = 0; i < count; i++) {
+        // 计算目标难度，确保在 [min, max] 之间均匀分布
+        const targetDiff = count > 1
+            ? min + (max - min) * (i / (count - 1))
+            : (min + max) / 2;
+
+        // 筛选尚未选用的题目
+        let candidates = filteredProblems.filter(p => !usedUrls.has(p.url));
+
+        if (candidates.length === 0) {
+            logger.error(`selectProblems: No available problems for index ${i}`);
+            continue;
+        }
+
+        // 按与目标难度的接近程度排序，取前 10 个最接近的题目
+        candidates.sort((a, b) => Math.abs(a.difficulty - targetDiff) - Math.abs(b.difficulty - targetDiff));
+        const topCandidates = candidates.slice(0, 10);
+
+        // 从最接近的候选题目中随机选择一个，增加题目多样性
+        const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
+
+        usedUrls.add(selected.url);
+        result.push({
+            ...selected,
+            status: 0,
+            acuser: "",
+            score: 0 // 稍后统一设置
+        });
+
+        logger.debug(`selectProblems: Selected "${selected.title}" (difficulty: ${selected.difficulty}, target: ${targetDiff.toFixed(0)})`);
+    }
+
+    // 最后按难度升序排列
+    return result.sort((a, b) => a.difficulty - b.difficulty);
+}
+
+/**
+ * 开始比赛的 API 处理函数
+ * @param {object} ctx Koa 上下文
+ * @param {function} next 下一个中间件
+ */
 async function contest_start(ctx, next) {
     const { room_id } = ctx.request.body;
 
@@ -47,6 +122,10 @@ async function contest_start(ctx, next) {
             return;
         }
 
+        // 每次开始比赛前更新所有人的 AC 记录
+        logger.debug(`contest_start: Updating AC records for ${allUsernames.join(', ')}`);
+        await Promise.allSettled(allUsernames.map(username => updateUserAC(username)));
+
         if (allUsernames.some(name => !user[name] || !user[name].ready)) {
             ctx.status = 403;
             ctx.body = { success: false, error: 'Room is not ready' };
@@ -61,17 +140,7 @@ async function contest_start(ctx, next) {
 
         const id = room.id;
         const url = room.url;
-        const master = room.master; // 获取房主
-
-        // 准备比赛用的用户数据，移除 ready 字段并添加 score
-        const contestUser = {};
-        for (const username of allUsernames) {
-            contestUser[username] = {
-                avatar: user[username].avatar,
-                place: user[username].place,
-                score: 0
-            };
-        }
+        const master = room.master;
 
         const maxRating = room.setting_rating_highest ?? 3000;
         const minRating = room.setting_rating_lowest ?? 0;
@@ -80,164 +149,25 @@ async function contest_start(ctx, next) {
 
         logger.debug(`contest_start: Fetching problems with difficulty between ${minRating} and ${maxRating}`);
 
-        const problemList = [];
-        // 获取所有符合条件的题目
+        // 获取所有符合条件的题目，并直接筛选掉 AHC 和房间内任何人已 AC 的题目
         const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minRating, maxRating]);
-        const filteredProblems = allProblems.filter(p => !p.title.includes('ahc'));
+        const acceptedProblems = await getAcceptedProblems(allUsernames);
+        const filteredProblems = allProblems.filter(p => {
+            const isAHC = p.title.toLowerCase().includes('ahc');
+            const taskId = p.url.split('/').pop();
+            const isAccepted = acceptedProblems.has(taskId);
+            return !isAHC && !isAccepted;
+        });
 
-        logger.debug(`contest_start: Found ${allProblems.length} total problems, ${filteredProblems.length} after filtering`);
+        logger.debug(`contest_start: Found ${allProblems.length} total problems, ${filteredProblems.length} after filtering AC and AHC`);
 
         if (filteredProblems.length === 0) {
             ctx.status = 200;
-            ctx.body = { success: false, error: 'No problems found in this difficulty range' };
+            ctx.body = { success: false, error: 'No problems found in this difficulty range after filtering AC' };
             return;
         }
 
-        if (filteredProblems.length < problemCount) {
-            logger.warn(`contest_start: Requested ${problemCount} problems but only found ${filteredProblems.length}`);
-        }
-
-        const atnames = await Promise.all(allUsernames.map(async (name) => {
-            try {
-                const url = config.buildApiUrl(`/atname/${name}`);
-                const res = await fetch(url);
-                if (!res.ok) {
-                    logger.warn(`contest_start: Failed to fetch ATName for ${name}: ${res.status}`);
-                    return name; // Fallback to username
-                }
-                return await res.text();
-            } catch (err) {
-                logger.error(`contest_start: Error fetching ATName for ${name}: ${err.message}`);
-                return name;
-            }
-        }));
-        const userAtnameMap = new Map(allUsernames.map((name, i) => [name, atnames[i]]));
-
-        const checkUserAC = async (username, task) => {
-            const atname = userAtnameMap.get(username);
-            if (!atname) return false;
-
-            for (let i = 0; i < 3; i++) { // Retry up to 3 times
-                try {
-                    const response = await Promise.race([
-                        fetch(config.buildApiUrl('/user_submissions'), {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ username: atname, task, status: 'AC' }),
-                        }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-                    ]);
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        return data.length > 0;
-                    } else if (response.status < 500) {
-                        return false; // Don't retry for client-side errors
-                    }
-                } catch (error) {
-                    logger.error(`Attempt ${i + 1} failed for ${username} on ${task}: ${error.message}`);
-                    if (i === 2) return false; // Return false after the last attempt
-                    await new Promise(res => setTimeout(res, 1000 * (i + 1))); // Exponential backoff
-                }
-            }
-            return false;
-        };
-
-        /**
-         * 选择比赛题目
-         * @param {Array} problems 候选题目列表
-         * @param {number} count 需要选择的题目数量
-         * @param {number} min 最低难度
-         * @param {number} max 最高难度
-         * @returns {Promise<Array>} 选择的题目列表
-         */
-        const selectProblems = async (problems, count, min, max) => {
-            const result = [];
-            const usedUrls = new Set();
-
-            logger.debug(`selectProblems: Selecting ${count} problems from ${problems.length} candidates`);
-
-            for (let i = 0; i < count; i++) {
-                // 计算目标难度，确保在 [min, max] 之间均匀分布
-                const targetDiff = count > 1
-                    ? min + (max - min) * (i / (count - 1))
-                    : (min + max) / 2;
-
-                logger.debug(`selectProblems: Problem ${i + 1}/${count}, target difficulty: ${targetDiff.toFixed(0)}`);
-
-                // 初始搜索范围
-                let margin = 50;
-                let candidates = [];
-
-                // 逐渐扩大搜索范围直到找到足够的候选题目
-                while (candidates.length < 5 && margin < (max - min + 100)) {
-                    candidates = problems.filter(p =>
-                        Math.abs(p.difficulty - targetDiff) <= margin &&
-                        !usedUrls.has(p.url)
-                    );
-                    margin += 50;
-                }
-
-                logger.debug(`selectProblems: Found ${candidates.length} candidates within margin ${margin - 50}`);
-
-                // 如果还是没有题目，尝试从所有可用题目中找最接近的
-                if (candidates.length === 0) {
-                    candidates = problems
-                        .filter(p => !usedUrls.has(p.url))
-                        .sort((a, b) => Math.abs(a.difficulty - targetDiff) - Math.abs(b.difficulty - targetDiff))
-                        .slice(0, 5);
-                    logger.debug(`selectProblems: Fallback to ${candidates.length} closest problems`);
-                }
-
-                if (candidates.length === 0) {
-                    logger.warn(`selectProblems: No candidates available for problem ${i + 1}`);
-                    continue;
-                }
-
-                // 随机排序候选题目
-                candidates.sort(() => Math.random() - 0.5);
-
-                let selected = null;
-                // 检查候选题目是否已被用户 AC，限制检查数量以防过多请求
-                const checkLimit = Math.min(candidates.length, 5);
-                for (let j = 0; j < checkLimit; j++) {
-                    const cand = candidates[j];
-                    const task = cand.url.split('/').pop();
-
-                    try {
-                        const checkResults = await Promise.all(
-                            allUsernames.map(name => checkUserAC(name, task))
-                        );
-
-                        if (!checkResults.some(hasAC => hasAC)) {
-                            selected = cand;
-                            logger.debug(`selectProblems: Selected problem ${selected.title} (not AC'd by anyone)`);
-                            break;
-                        }
-                    } catch (err) {
-                        logger.error(`selectProblems: Error checking AC status for ${task}: ${err.message}`);
-                    }
-                }
-
-                // 如果所有候选都被 AC 了，就从候选里挑一个
-                if (!selected && candidates.length > 0) {
-                    selected = candidates[0];
-                    logger.debug(`selectProblems: Selected problem ${selected.title} (all candidates were AC'd)`);
-                }
-
-                if (selected) {
-                    usedUrls.add(selected.url);
-                    result.push({
-                        ...selected,
-                        status: 0,
-                        acuser: "",
-                        score: 0 // 稍后统一设置
-                    });
-                }
-            }
-            return result;
-        };
-
+        // 选择题目
         const selectedProblems = await selectProblems(filteredProblems, problemCount, minRating, maxRating);
 
         if (selectedProblems.length === 0) {
@@ -246,16 +176,9 @@ async function contest_start(ctx, next) {
             return;
         }
 
-        logger.info(`contest_start: Successfully selected ${selectedProblems.length} problems`);
-        problemList.push(...selectedProblems);
-
-        problemList.sort((a, b) => a.difficulty - b.difficulty);
-
-        let score = 100;
-
-        for (let i = 0; i < problemList.length; i++) {
-            problemList[i].score = score;
-            score = score + 100;
+        // 分配分数 (100, 200, 300...)
+        for (let i = 0; i < selectedProblems.length; i++) {
+            selectedProblems[i].score = (i + 1) * 100;
         }
 
         const startTime = new Date();
@@ -272,7 +195,7 @@ async function contest_start(ctx, next) {
             );
 
             // 2. 创建题目记录
-            for (const p of problemList) {
+            for (const p of selectedProblems) {
                 await conn.query(
                     'INSERT INTO contest_problems (contest_id, problem_id, title, url, score, status, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)',
                     [id, p.id, p.title, p.url, p.score, 0, p.difficulty]

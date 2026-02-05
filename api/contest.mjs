@@ -54,7 +54,8 @@ async function contest(ctx, next) {
             url: p.url,
             score: p.score,
             status: p.status,
-            difficulty: p.difficulty
+            difficulty: p.difficulty,
+            acuser: p.acuser
         }));
 
         const submission = submissions.map(s => ({

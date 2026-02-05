@@ -1,47 +1,38 @@
 // user_submissions.mjs
-import * as cheerio from 'cheerio';
 import logger from '../logger.mjs';
 
 async function getUserSubmission(ctx, next) {
-    const { username, task } = ctx.request.body;
+    const { username, problem_id, startTime } = ctx.request.body;
     let status = ctx.request.body.status;
-    if (!username || !task) {
+    if (!username || !problem_id || !startTime) {
         ctx.status = 400;
         ctx.body = { error: 'Invalid parameters' };
         return;
     }
-    logger.debug(`user_submissions: Fetching submission records for user ${username} on task ${task}`);
+    logger.debug(`user_submissions: Fetching submission records for user ${username} on problem_id ${problem_id}, startTime: ${startTime}`);
     if (!status) status = "";
-    const contest = task.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
-    const url = "https://atcoder.jp/contests/" + contest + "/submissions?f.Task=" + task + "&f.LanguageName=&f.Status=" + status + "&f.User=" + username;
+    const url = `https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user=${username}&from_second=${new Date(startTime).getTime() / 1000}`
     try {
         const response = await fetch(
             url, {
-            method: 'GET',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0',
-                'Cookie': '_ga=GA1.1.300150255.1737274970; _ga_HLDXGWFW73=GS1.1.1739623543.1.1.1739623589.0.0.0; OJB_Session_ojb_updateL10nWebsiteJson_zh=true; timeDelta=-533; REVEL_FLASH=; _ga_RC512FD18N=GS2.1.s1746337962$o56$g1$t1746338778$j0$l0$h0; REVEL_SESSION=2a5bd8ec47b7b542fc1e4c72367701baae9a1b95-%00UserScreenName%3Axgshine%00%00UserName%3Axgshine%00%00a%3Afalse%00%00w%3Afalse%00%00_TS%3A1761890779%00%00csrf_token%3AhYj1t6YWa0LN%2Bm77lKYzy6lB6sMkPIwb7x8e%2Fs55Bi4%3D%00%00SessionKey%3Adf2e45017248c8fe8acd855a1285eb64e38c3a2ece47e82d42ea27b63d60bdfd%00',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'
-            }
+            method: 'GET'
         }
         );
-        const data = await response.text();
-        const $ = cheerio.load(data);
+        const data = await response.json();
         let result = [];
         try {
-            $('.table-responsive').find('table').find('tbody').find('tr').each(function (index, element) {
+            for (const sub of data) {
+                if (sub.problem_id != problem_id) continue;
                 let row = {
-                    "time": $(this).find('time').text(),
-                    "username": $(this).find('a[href^="/users/"]').text(),
-                    "language": $(this).find('td').eq(3).find('a').text(),
-                    "score": $(this).find('[class~="text-right"][class~="submission-score"]').text(),
-                    "size": $(this).find('.text-right').eq(1).text(),
-                    "run_time": $(this).find('.text-right').eq(2).text(),
-                    "memory": $(this).find('.text-right').eq(3).text(),
-                    "status": $(this).find('span[data-placement="top"]').text()
-                };
+                    "time": new Date(sub.epoch_second * 1000).toLocaleString("zh-CN", { hour12: false }),
+                    "username": username,
+                    "language": sub.language,
+                    "score": sub.point,
+                    "status": sub.result,
+                    "run_time": sub.execution_time
+                }
                 result.push(row);
-            });
+            }
             ctx.type = "text/json";
             ctx.status = 200;
             ctx.body = JSON.stringify(result);
@@ -52,7 +43,7 @@ async function getUserSubmission(ctx, next) {
             return;
         }
     } catch (e) {
-        logger.error(`user_submissions: Failed to fetch submission records for user ${username} on task ${task}: ${e.message}`);
+        logger.error(`user_submissions: Failed to fetch submission records for user ${username} on problem_id ${problem_id}: ${e.message}`);
         ctx.status = 500;
         ctx.body = { error: 'Server Error' };
         return;

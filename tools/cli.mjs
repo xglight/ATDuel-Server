@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt';
 import mysql from 'mysql2/promise';
 import config from '../config.mjs';
 import { tableDefinitions } from '../table_definitions.mjs';
+import problem from './problem.mjs';
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -184,6 +185,77 @@ const adminCommands = {
 };
 
 /**
+ * 数据库命令
+ */
+const databaseCommands = {
+    async init(args) {
+        console.log('\n=== ATDuel 数据库初始化 ===');
+
+        let connection;
+        try {
+            connection = await getConnection(false);
+            const dbName = config.mysql.database;
+
+            // 检查数据库
+            const [databases] = await connection.query('SHOW DATABASES LIKE ?', [dbName]);
+            let dbDropped = false;
+
+            if (databases.length > 0) {
+                console.log(`\n警告: 数据库 "${dbName}" 已经存在。`);
+                const confirm = await question(`要删除并重新创建数据库 "${dbName}" 吗？(yes/no): `);
+                if (confirm.toLowerCase() === 'yes') {
+                    await connection.query(`DROP DATABASE \`${dbName}\``);
+                    dbDropped = true;
+                }
+            }
+
+            await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+            await connection.query(`USE \`${dbName}\``);
+
+            // 检查表
+            let forceOverwriteTables = false;
+            if (!dbDropped) {
+                const [tables] = await connection.query('SHOW TABLES');
+                if (tables.length > 0) {
+                    const confirm = await question(`发现已存在 ${tables.length} 个表，是否强制覆盖？(yes/no): `);
+                    if (confirm.toLowerCase() === 'yes') forceOverwriteTables = true;
+                }
+            }
+
+            for (const [tableName, createSQL] of Object.entries(tableDefinitions)) {
+                if (forceOverwriteTables) await connection.query(`DROP TABLE IF EXISTS \`${tableName}\``);
+                await connection.query(createSQL);
+                console.log(`表 "${tableName}" 已就绪`);
+            }
+
+            console.log('\n数据库初始化完成。');
+
+        } catch (err) {
+            console.error('\n初始化失败:', err.message);
+        } finally {
+            if (connection) await connection.end();
+        }
+    }
+}
+
+/**
+ * 题目命令
+ */
+const problemCommands = {
+    /**
+     * 更新题目信息
+     */
+    async update() {
+        console.log('\n=== ATDuel 题目更新 ===\n');
+        console.log('当前的题目更新依赖 Clist 的 API，请确保 API 密钥正确。');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        let username = await question('请输入 Clist 用户名: ');
+        let api_key = await question('请输入 Clist API 密钥: ');
+        await problem.update(username, api_key);
+    }
+}
+
+/**
  * 初始化命令
  */
 async function handleInit() {
@@ -239,6 +311,8 @@ async function handleInit() {
     }
 }
 
+
+
 /**
  * 打印帮助信息
  */
@@ -250,6 +324,8 @@ ATDuel CLI 工具
 
 命令列表:
   init                      初始化数据库、表和初始管理员
+  database init             初始化数据库
+  problem update            更新题目信息
   admin list                列出所有管理员
   admin add [username]      添加新管理员
   admin setPassword [user]  修改管理员密码
@@ -268,19 +344,34 @@ async function main() {
         case 'init':
             await handleInit();
             break;
+        case 'database':
+            if (databaseCommands[args[1]]) {
+                await databaseCommands[args[1]](args.slice(2));
+            } else {
+                console.error(`未知 database 子命令: ${args[1] || ''}`);
+                showHelp();
+            }
+            break;
+        case 'problem':
+            if (problemCommands[args[1]]) {
+                await problemCommands[args[1]](args.slice(2));
+            } else {
+                console.error(`未知 problem 子命令: ${args[1] || ''}`);
+                showHelp();
+            }
+            break;
         case 'admin':
-            const subCmd = args[1];
             // 别名映射
             const alias = {
                 'setAdminUsername': 'setUsername',
                 'setAdminPassword': 'setPassword'
             };
-            const targetCmd = alias[subCmd] || subCmd;
+            const targetCmd = alias[args[1]] || args[1];
 
             if (adminCommands[targetCmd]) {
                 await adminCommands[targetCmd](args.slice(2));
             } else {
-                console.error(`未知 admin 子命令: ${subCmd || ''}`);
+                console.error(`未知 admin 子命令: ${args[1] || ''}`);
                 showHelp();
             }
             break;
