@@ -13,7 +13,7 @@ async function user_contest(ctx, next) {
 
     logger.info(`user_contest: Fetching contest history for user ${username}`);
     try {
-        const [historyRows] = await pool.query('SELECT contest_id FROM user_contest_history WHERE username = ?', [username]);
+        const [historyRows] = await pool.query('SELECT DISTINCT contest_id FROM contest_participants WHERE username = ?', [username]);
         if (historyRows.length === 0) {
             ctx.status = 200;
             ctx.type = 'application/json';
@@ -27,12 +27,30 @@ async function user_contest(ctx, next) {
         const data = [];
         for (const contest of contests) {
             // 获取比赛关联数据
-            const [participants] = await pool.query('SELECT * FROM contest_participants WHERE contest_id = ?', [contest.id]);
-            const [problems] = await pool.query('SELECT * FROM contest_problems WHERE contest_id = ?', [contest.id]);
-            const [ratings] = await pool.query('SELECT * FROM contest_ratings WHERE contest_id = ?', [contest.id]);
+            const [
+                [teams],
+                [participants],
+                [problems],
+                [ratings]
+            ] = await Promise.all([
+                pool.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contest.id]),
+                pool.query('SELECT * FROM contest_participants WHERE contest_id = ?', [contest.id]),
+                pool.query('SELECT * FROM contest_problems WHERE contest_id = ?', [contest.id]),
+                pool.query('SELECT * FROM contest_ratings WHERE contest_id = ?', [contest.id])
+            ]);
+
+            const team = { A: [], B: [] };
+            teams.forEach(t => {
+                if (!team[t.team_label]) team[t.team_label] = [];
+                team[t.team_label].push(t.username);
+            });
 
             const userMap = {};
-            participants.forEach(p => userMap[p.username] = p);
+            participants.forEach(p => userMap[p.username] = {
+                score: p.score,
+                place: p.place,
+                avatar: p.avatar
+            });
 
             const ratingMap = {};
             ratings.forEach(r => ratingMap[r.username] = {
@@ -43,8 +61,12 @@ async function user_contest(ctx, next) {
 
             data.push({
                 id: contest.id,
+                url: contest.url,
                 startTime: contest.startTime,
                 endTime: contest.endTime,
+                scorea: contest.scorea,
+                scoreb: contest.scoreb,
+                team: team,
                 user: userMap,
                 rating: ratingMap,
                 problem: problems,
@@ -58,8 +80,7 @@ async function user_contest(ctx, next) {
     } catch (err) {
         logger.error(`user_contest: Failed to fetch contest history for user ${username}: ${err.message}`);
         ctx.status = 500;
-        ctx.type = 'text/plain';
-        ctx.body = 'Server Error';
+        ctx.body = { error: 'Internal Server Error' };
         return;
     }
 }

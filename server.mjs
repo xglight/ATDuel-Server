@@ -11,6 +11,7 @@ import logger from './logger.mjs';
 import config from './config.mjs';
 import { WebSocketServer, WebSocket } from 'ws';
 import clientRoutes from '../ATDuel-Client/source/load.mjs';
+import requestStore from './tools/change_request_store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = new Koa();
@@ -143,13 +144,27 @@ async function main() {
     });
 
     // 监听广播事件
-    app.on('broadcast', (message) => {
+    app.on('broadcast', async (message) => {
         if (message.roomId) {
             broadcastToRoom(message.roomId, message);
         }
         else if (message.contestId) {
-            if (message.type === 'contest_update' || message.type === 'system_message') {
+            if (['contest_update', 'system_message', 'change_problem_request', 'change_problem_result'].includes(message.type)) {
                 broadcastToContest(message.contestId, message);
+            }
+
+            // 持久化换题相关的系统消息
+            try {
+                if (message.type === 'change_problem_request') {
+                    const { requesterTeam, requesterName, problemTitle } = message.data;
+                    const msg = `队伍 ${requesterTeam} (${requesterName}) 请求更换题目: ${problemTitle}`;
+                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', msg, 'all');
+                }
+                else if (message.type === 'change_problem_result') {
+                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', message.data.message, 'all');
+                }
+            } catch (err) {
+                logger.error('server: Failed to persist system message:', err);
             }
         }
     });
@@ -226,6 +241,29 @@ async function main() {
                     } catch (error) {
                         logger.error('ws: Failed to fetch historical messages: ', error);
                     }
+
+                    // 发送当前正在进行的换题请求
+                    const activeReq = requestStore.get(contestId);
+                    if (activeReq) {
+                        try {
+                            // 构造安全的数据对象（去除 timer 等内部属性）
+                            const safeReqData = {
+                                requestId: activeReq.requestId,
+                                problemId: activeReq.problemId,
+                                problemTitle: activeReq.problemTitle,
+                                requesterTeam: activeReq.requesterTeam,
+                                requesterName: activeReq.requesterName,
+                                expireAt: activeReq.expireAt
+                            };
+                            ws.send(JSON.stringify({
+                                type: 'change_problem_request',
+                                data: safeReqData
+                            }));
+                        } catch (err) {
+                            logger.error('ws: Failed to send active change request:', err);
+                        }
+                    }
+
                 } else if (data.type === 'chat_message') {
                     // 输入验证
                     if (!data.contestId || !data.sender || !data.message || !data.mode) {

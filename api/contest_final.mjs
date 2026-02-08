@@ -1,6 +1,7 @@
 // contest_final.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import requestStore from '../tools/change_request_store.mjs';
 
 /**
  * 结束比赛并计算 Rating 变动
@@ -54,6 +55,9 @@ async function contest_final(ctx, next) {
             [contestId]
         );
 
+        // 比赛结束，清除所有挂起的换题请求
+        requestStore.clear(contest.id);
+
         // 获取比赛数据
         const [teams] = await conn.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contest.id]);
         const [participants] = await conn.query('SELECT * FROM contest_participants WHERE contest_id = ?', [contest.id]);
@@ -77,7 +81,7 @@ async function contest_final(ctx, next) {
                 const userMap = new Map(users.map(u => [u.username, u]));
 
                 // 获取每个用户的参赛次数 (不包含本次)
-                const [histories] = await conn.query('SELECT username, COUNT(*) as count FROM user_contest_history WHERE username IN (?) GROUP BY username', [allUsernames]);
+                const [histories] = await conn.query('SELECT username, COUNT(*) as count FROM contest_participants WHERE username IN (?) AND contest_id != ? GROUP BY username', [allUsernames, contest.id]);
                 const historyMap = new Map(histories.map(h => [h.username, h.count]));
 
                 // 3.1 团队有效评分 (Effective Team Rating)
@@ -154,12 +158,6 @@ async function contest_final(ctx, next) {
                         await conn.execute(
                             'UPDATE user SET rating = ? WHERE username = ?',
                             [newRating, username]
-                        );
-
-                        // 记录参赛历史
-                        await conn.execute(
-                            'INSERT INTO user_contest_history (username, contest_id) VALUES (?, ?)',
-                            [username, contest.id]
                         );
                     }
                 };

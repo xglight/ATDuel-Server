@@ -11,7 +11,7 @@ async function user_contestid(ctx, next) {
     }
     logger.info(`user_contestid: Fetching contest IDs for user ${username}`);
     try {
-        const [rows] = await pool.query('SELECT contest_id FROM user_contest_history WHERE username = ?', [username]);
+        const [rows] = await pool.query('SELECT contest_id FROM contest_participants WHERE username = ?', [username]);
 
         const user_contest = rows.map(r => r.contest_id);
         ctx.type = 'text/json';

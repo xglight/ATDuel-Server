@@ -26,6 +26,12 @@ export async function updateUserAC(username) {
                 if (item.result === 'AC') {
                     const name = item.problem_id;
                     try {
+                        const [rows] = await pool.query(
+                            'SELECT * FROM user_problem_accept WHERE username = ? AND problem_id = ?'
+                            , [username, name]);
+                        if (rows.length > 0) {
+                            continue;
+                        }
                         await pool.execute(
                             'INSERT IGNORE INTO user_problem_accept (username, problem_id) VALUES (?,?)'
                             , [username, name]);

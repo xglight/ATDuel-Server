@@ -69,12 +69,21 @@ async function processTeamSubmissions(team, problemName, subdata, startTime) {
  */
 async function submission_update(ctx, next) {
     try {
-        const { problemTitle, contestId } = ctx.request.body;
-        if (!problemTitle || !contestId) {
+        const { problemTitle, contestId, username, token } = ctx.request.body;
+        if (!problemTitle || !contestId || !username || !token) {
             ctx.status = 200;
             ctx.body = { success: false, error: 'Invalid parameters' };
             return;
         }
+
+        // 校验 Token
+        const [loginRows] = await pool.query('SELECT * FROM login_status WHERE username = ? AND token = ?', [username, token]);
+        if (loginRows.length === 0) {
+            ctx.status = 403;
+            ctx.body = { success: false, error: '未登录或 Token 无效' };
+            return;
+        }
+
         const problemName = problemTitle.split('-')[0].trim();
         // 获取当前比赛数据
         const [contestRows] = await pool.query('SELECT * FROM contest WHERE url = ?', [contestId]);
@@ -85,7 +94,16 @@ async function submission_update(ctx, next) {
         }
 
         const contest = contestRows[0];
-        logger.info(`submission_update: Updating submissions: ${problemName}`);
+
+        // 验证用户是否为比赛成员
+        const [teamRows] = await pool.query('SELECT team_label FROM contest_teams WHERE contest_id = ? AND username = ?', [contest.id, username]);
+        if (teamRows.length === 0) {
+            ctx.status = 200;
+            ctx.body = { success: false, error: '您不是该比赛的参赛者，无法判题' };
+            return;
+        }
+
+        logger.info(`submission_update: Updating submissions: ${problemName} by ${username}`);
 
         // 获取比赛队伍信息
         const [teams] = await pool.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contest.id]);

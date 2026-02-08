@@ -13,14 +13,6 @@ export const tableDefinitions = {
             rating INT DEFAULT 0,
             avatar VARCHAR(255)
         )`,
-    user_contest_history: `
-        CREATE TABLE IF NOT EXISTS user_contest_history (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(255) NOT NULL,
-            contest_id INT NOT NULL,
-            INDEX idx_username (username),
-            INDEX idx_contest_id (contest_id)
-        )`,
     user_problem_accept: `
         CREATE TABLE IF NOT EXISTS user_problem_accept (
             id INT AUTO_INCREMENT PRIMARY KEY,
