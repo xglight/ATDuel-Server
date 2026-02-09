@@ -68,4 +68,4 @@ npm start
 
 ## 开源协议
 
-本项目采用 [MIT License](LICENSE) 协议。
+本项目采用 [GPL-3.0](LICENSE) 协议。
