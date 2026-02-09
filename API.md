@@ -1,5 +1,25 @@
 # API 文档
 
+<button onclick="copyApiDoc()" id="copyBtn" style="cursor:pointer;padding:6px 12px;background:#28a745;color:white;border:none;border-radius:4px;margin-bottom:20px;font-size:14px;">
+    <i class="fas fa-copy"></i> 复制文档内容
+</button>
+
+<script>
+function copyApiDoc() {
+    const text = document.body.innerText.replace('复制文档内容', '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        const oldText = btn.innerText;
+        btn.innerText = '已复制！';
+        btn.style.background = '#17a2b8';
+        setTimeout(() => {
+            btn.innerText = oldText;
+            btn.style.background = '#28a745';
+        }, 2000);
+    });
+}
+</script>
+
 前缀：`http://${server}:${port}/${apiprefix}` (默认 apiprefix 为 `api`)
 
 ## 用户相关
@@ -414,6 +434,41 @@
 
 ---
 
+### POST /contest/request_action
+
+#### 说明
+
+发起平局 (draw) 或认输 (surrender) 请求。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| contestId | string | 是 | 比赛 URL ID |
+| type | string | 是 | 请求类型: `draw` (平局) 或 `surrender` (认输) |
+| username | string | 是 | 发起者用户名 |
+| token | string | 是 | 发起者 token |
+
+---
+
+### POST /contest/vote_action
+
+#### 说明
+
+参与平局或认输请求的投票。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| contestId | string | 是 | 比赛 URL ID |
+| requestId | string | 是 | 请求 ID |
+| action | string | 是 | 响应动作: `accept` (同意) 或 `reject` (拒绝) |
+| username | string | 是 | 投票者用户名 |
+| token | string | 是 | 投票者 token |
+
+---
+
 ## 房间相关
 
 ### GET /rooms
@@ -667,6 +722,83 @@
 | :---: | :---: | :---: | :--- |
 | token | string | 是 | 管理员 token |
 | date | string | 否 | 指定日期 (如 `2024-01-01`), 不传则返回最新日志 |
+
+---
+
+### POST /admin/contest_delete
+
+#### 说明
+
+管理员删除指定比赛。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| contestId | string | 是 | 比赛 URL ID |
+| token | string | 是 | 管理员 token |
+
+---
+
+### POST /admin/contest_update
+
+#### 说明
+
+管理员更新比赛信息。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| contestId | string | 是 | 比赛 URL ID |
+| token | string | 是 | 管理员 token |
+| startTime | string | 否 | 开始时间 (ISO 格式) |
+| endTime | string | 否 | 结束时间 (ISO 格式) |
+| rated | bool | 否 | 是否 Rated |
+| status | int | 否 | 状态 (0: 未开始, 1: 进行中, 2: 已结束) |
+
+---
+
+### POST /admin/room_delete
+
+#### 说明
+
+管理员删除房间。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| roomId | string | 是 | 房间 ID 或 URL ID |
+| token | string | 是 | 管理员 token |
+
+---
+
+### POST /admin/contest_clear
+
+#### 说明
+
+管理员清空所有已结束的比赛及其关联数据。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| token | string | 是 | 管理员 token |
+
+---
+
+### POST /admin/room_clear
+
+#### 说明
+
+管理员清空所有房间及其关联数据。
+
+#### 请求参数
+
+| 参数名 | 类型 | 必填 | 描述 |
+| :---: | :---: | :---: | :--- |
+| token | string | 是 | 管理员 token |
 
 ---
 

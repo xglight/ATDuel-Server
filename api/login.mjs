@@ -26,7 +26,7 @@ async function login(ctx, next) {
             for (const ban of rowsBan) {
                 if (new Date(ban.endBanTime) > new Date()) {
                     ctx.status = 403;
-                    ctx.body = { success: false, message: 'You have been banned until ' + ban.endBanTime };
+                    ctx.body = { success: false, message: 'You have been banned until ' + ban.endBanTime + ' for ' + ban.reason };
                     return;
                 }
             }

@@ -44,7 +44,7 @@ export default {
         const expireAt = Date.now() + timeoutMs;
 
         const timer = setTimeout(() => {
-            logger.info(`change_request_store: Request for contest ${contestId} expired`);
+            logger.debug(`change_request_store: Request for contest ${contestId} expired`);
             const req = requests.get(contestId);
             if (req) {
                 requests.delete(contestId);

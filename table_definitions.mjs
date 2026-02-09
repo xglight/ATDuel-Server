@@ -26,6 +26,7 @@ export const tableDefinitions = {
             id INT AUTO_INCREMENT PRIMARY KEY,
             problem_id VARCHAR(255) NOT NULL,
             title VARCHAR(255) NOT NULL,
+            contest VARCHAR(255) NOT NULL,
             url VARCHAR(255) NOT NULL,
             difficulty INT NOT NULL
         )`,
@@ -142,16 +143,16 @@ export const tableDefinitions = {
         CREATE TABLE IF NOT EXISTS user_ban (
             id SERIAL PRIMARY KEY,
             username VARCHAR(255) NOT NULL,
-            startBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            endBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            startBanTime DATETIME DEFAULT CURRENT_TIMESTAMP,
+            endBanTime DATETIME DEFAULT CURRENT_TIMESTAMP,
             reason TEXT
         )`,
     ip_ban: `
         CREATE TABLE IF NOT EXISTS ip_ban (
             id SERIAL PRIMARY KEY,
             ip VARCHAR(255) NOT NULL,
-            startBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            endBanTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            startBanTime DATETIME DEFAULT CURRENT_TIMESTAMP,
+            endBanTime DATETIME DEFAULT CURRENT_TIMESTAMP,
             reason TEXT
         )`,
     admin_status: `
@@ -166,5 +167,13 @@ export const tableDefinitions = {
             username VARCHAR(255) NOT NULL UNIQUE,
             password VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+    bulletin: `
+        CREATE TABLE IF NOT EXISTS bulletin (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )`
 };

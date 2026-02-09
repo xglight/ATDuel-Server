@@ -12,6 +12,8 @@ import config from './config.mjs';
 import { WebSocketServer, WebSocket } from 'ws';
 import clientRoutes from '../ATDuel-Client/source/load.mjs';
 import requestStore from './tools/change_request_store.mjs';
+import { finalizeContest } from './api/contest_final.mjs';
+import actionStore from './tools/contest_action_store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = new Koa();
@@ -94,13 +96,18 @@ function broadcastToRoom(roomId, message) {
  * 广播消息给特定比赛的所有客户端
  * @param {string} contestId 比赛ID
  * @param {object} message 要广播的消息对象
+ * @param {string} targetTeam 目标队伍ID (可选，用于认输请求等)
  */
-function broadcastToContest(contestId, message) {
+function broadcastToContest(contestId, message, targetTeam = null) {
     const clients = contestClients.get(contestId);
     if (clients) {
         const data = JSON.stringify(message);
         clients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
+                // 如果指定了目标队伍，则只发送给该队伍的成员
+                if (targetTeam && client.teamId !== targetTeam) {
+                    return;
+                }
                 try {
                     client.send(data, (err) => {
                         if (err) {
@@ -149,27 +156,63 @@ async function main() {
             broadcastToRoom(message.roomId, message);
         }
         else if (message.contestId) {
-            if (['contest_update', 'system_message', 'change_problem_request', 'change_problem_result'].includes(message.type)) {
-                broadcastToContest(message.contestId, message);
+            // 1. 广播原始消息 (用于触发实时 UI，如投票卡片)
+            if (['contest_update', 'system_message', 'change_problem_request', 'change_problem_result', 'contest_action_request', 'contest_action_update', 'contest_action_result'].includes(message.type)) {
+                broadcastToContest(message.contestId, message, message.targetTeam);
             }
 
-            // 持久化换题相关的系统消息
+            // 2. 转换特定业务消息为永久系统消息并持久化
             try {
+                let systemMsgText = null;
+
                 if (message.type === 'change_problem_request') {
-                    const { requesterTeam, requesterName, problemTitle } = message.data;
-                    const msg = `队伍 ${requesterTeam} (${requesterName}) 请求更换题目: ${problemTitle}`;
-                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', msg, 'all');
+                    systemMsgText = `队伍 ${message.data.requesterTeam} 发起了换题请求：${message.data.problemTitle}`;
+                } else if (message.type === 'change_problem_result') {
+                    systemMsgText = message.data.message;
+                } else if (message.type === 'contest_action_request') {
+                    const actionName = message.data.type === 'draw' ? '平局' : '认输';
+                    systemMsgText = message.data.type === 'draw' ? `有人发起了${actionName}请求` : `队伍 ${message.data.requesterTeam} 发起了${actionName}请求`;
+                } else if (message.type === 'contest_action_result') {
+                    // 处理成功和失败的情况
+                    systemMsgText = message.data.message;
+                    // 这里不再追加 Rating 信息，让其由 contest_update 独立生成
+                } else if (message.type === 'contest_update' && message.status === 2) {
+                    // 无论是否开启 rated，只要比赛状态变为 2 (已结束)，始终生成结束消息
+                    let systemMsgContent = '比赛已结束！\nRating 变动如下：';
+                    if (message.ratingChanges && Object.keys(message.ratingChanges).length > 0) {
+                        for (const [username, change] of Object.entries(message.ratingChanges)) {
+                            const deltaStr = change.delta >= 0 ? `+${change.delta}` : `${change.delta}`;
+                            systemMsgContent += `\n${username}: ${change.oldRating} -> ${change.newRating} (${deltaStr})`;
+                        }
+                    } else {
+                        systemMsgContent += '\nRating 将不会被计算。';
+                    }
+                    systemMsgText = systemMsgContent;
+                } else if (message.type === 'system_message' && message.message) {
+                    // 已经是 system_message 类型，只需确保持久化 (避免重复广播)
+                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', message.message, 'all');
+                    return;
                 }
-                else if (message.type === 'change_problem_result') {
-                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', message.data.message, 'all');
+
+                if (systemMsgText) {
+                    logger.debug(`server: Storing and broadcasting persistent system message for ${message.type}: ${systemMsgText}`);
+                    // 持久化到数据库
+                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', systemMsgText, 'all');
+
+                    // 广播一条同步的系统消息，确保实时显示在聊天区
+                    broadcastToContest(message.contestId, {
+                        type: 'system_message',
+                        message: systemMsgText,
+                        timestamp: new Date().toISOString()
+                    });
                 }
             } catch (err) {
-                logger.error('server: Failed to persist system message:', err);
+                logger.error('server: Failed to process persistent system message:', err);
             }
         }
     });
 
-    // 处理WebSocket升级请求
+    // WebSocket升级请求处理
     server.on('upgrade', (request, socket, head) => {
         wss.handleUpgrade(request, socket, head, ws => {
             wss.emit('connection', ws, request);
@@ -261,6 +304,34 @@ async function main() {
                             }));
                         } catch (err) {
                             logger.error('ws: Failed to send active change request:', err);
+                        }
+                    }
+
+                    // 发送当前正在进行的比赛动作请求（平局/认输）
+                    const activeAction = actionStore.get(contestId);
+                    if (activeAction) {
+                        try {
+                            // 认输请求仅对本队成员可见
+                            if (activeAction.type === 'surrender' && activeAction.requesterTeam !== ws.teamId) {
+                                // 不发送
+                            } else {
+                                // 构造安全的数据对象（去除 timer, Set 等内部/循环引用属性）
+                                const safeActionData = {
+                                    type: activeAction.type,
+                                    requestId: activeAction.requestId,
+                                    requesterTeam: activeAction.requesterTeam,
+                                    requesterName: activeAction.requesterName,
+                                    totalNeeded: activeAction.totalNeeded,
+                                    expireAt: activeAction.expireAt,
+                                    currentVotes: activeAction.votes.size
+                                };
+                                ws.send(JSON.stringify({
+                                    type: 'contest_action_request',
+                                    data: safeActionData
+                                }));
+                            }
+                        } catch (err) {
+                            logger.error('ws: Failed to send active contest action:', err);
                         }
                     }
 
@@ -375,6 +446,63 @@ async function main() {
             }
         });
     });
+
+    // 定时检查比赛是否超时
+    setInterval(async () => {
+        try {
+            const timeLimit = config.content.timeLimit;
+            // 查询所有进行中且已超时的比赛
+            // startTime 为 DATETIME，我们需要将其转换为秒进行比较
+            const [contests] = await pool.query(
+                'SELECT url, startTime FROM contest WHERE status = 1'
+            );
+
+            const now = Date.now();
+            for (const contest of contests) {
+                const startTime = new Date(contest.startTime).getTime();
+                if (now - startTime > timeLimit * 1000) {
+                    logger.info(`server: Contest ${contest.url} timed out, forcing finalize (draw)...`);
+                    try {
+                        const result = await finalizeContest(contest.url, true);
+                        if (result.success) {
+                            // 广播比赛结束消息
+                            const endMessage = {
+                                type: 'contest_update',
+                                contestId: contest.url,
+                                action: 'end',
+                                status: 2,
+                                data: { message: '比赛已达最大时长，强制结束' },
+                                timestamp: new Date().toISOString()
+                            };
+                            broadcastToContest(contest.url, endMessage);
+
+                            // 发送系统消息
+                            let systemMsgContent = '比赛已达最大时长，强制结束！\nRating 变动如下：';
+                            if (result.ratingChanges && Object.keys(result.ratingChanges).length > 0) {
+                                for (const [username, change] of Object.entries(result.ratingChanges)) {
+                                    const deltaStr = change.delta >= 0 ? `+${change.delta}` : `${change.delta}`;
+                                    systemMsgContent += `\n${username}: ${change.oldRating} -> ${change.newRating} (${deltaStr})`;
+                                }
+                            } else {
+                                systemMsgContent += '\nRating 将不会被计算。';
+                            }
+
+                            broadcastToContest(contest.url, {
+                                type: 'system_message',
+                                contestId: contest.url,
+                                message: systemMsgContent,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    } catch (err) {
+                        logger.error(`server: Failed to auto-finalize contest ${contest.url}:`, err);
+                    }
+                }
+            }
+        } catch (err) {
+            logger.error('server: Error in contest timeout check interval:', err);
+        }
+    }, 10000); // 每 10 秒检查一次
 
     // 监听进程关闭信号
     process.on('SIGINT', async () => {

@@ -82,7 +82,7 @@ async function respondChangeProblem(ctx, next) {
                 requestId,
                 success: false,
                 reason: 'rejected',
-                message: `${username} 拒绝了换题请求`
+                message: `换题请求被拒绝`
             }
         });
 
@@ -171,7 +171,7 @@ async function respondChangeProblem(ctx, next) {
                     requestId,
                     success: true,
                     reason: 'accepted',
-                    message: `${username} 同意了换题请求`
+                    message: `换题请求已通过，题目已更新`
                 }
             });
 

@@ -182,7 +182,8 @@ async function contest_start(ctx, next) {
         }
 
         const startTime = new Date();
-        const endTime = new Date(startTime.getTime() + config.content.timeLimit * 1000);
+        // 比赛开始时 endTime 为 NULL，表示进行中
+        const endTime = null;
 
         const conn = await pool.getConnection();
         try {

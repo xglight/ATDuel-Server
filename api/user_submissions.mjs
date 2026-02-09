@@ -14,7 +14,7 @@ function toOffsetString(date, offsetMinutes) {
 }
 
 async function getUserSubmissions(ctx, next) {
-    const { username, problem_id, startTime } = ctx.request.body;
+    const { username, problem_id, startTime, contest: contestName } = ctx.request.body;
     let status = ctx.request.body.status;
     if (!username || !problem_id || !startTime) {
         ctx.status = 400;
@@ -35,6 +35,8 @@ async function getUserSubmissions(ctx, next) {
         try {
             for (const sub of data) {
                 if (sub.problem_id != problem_id) continue;
+                // 如果提供了 contestName，验证题目所属比赛是否匹配
+                if (contestName && sub.contest_id != contestName) continue;
                 let row = {
                     "time": toOffsetString(new Date(sub.epoch_second * 1000).toLocaleString("zh-CN", { hour12: false }), 8 * 60),
                     "username": username,
@@ -63,7 +65,7 @@ async function getUserSubmissions(ctx, next) {
 }
 
 async function getUserSubmissions2(ctx, next) {
-    const { username, problem_id, startTime } = ctx.request.body;
+    const { username, problem_id, startTime, contest: contestName } = ctx.request.body;
     let status = ctx.request.body.status;
     if (!username || !problem_id || !startTime) {
         ctx.status = 400;
@@ -72,8 +74,11 @@ async function getUserSubmissions2(ctx, next) {
     }
     logger.debug(`user_submissions: Fetching submission records for user ${username} on task ${problem_id}`);
     if (!status) status = "";
-    const contest = problem_id.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
+
+    // 如果提供了 contestName，则直接使用；否则从 problem_id 中推导
+    const contest = contestName || problem_id.split('_').slice(0, -1).join('_').trim().replace(/_/g, '-');
     const url = "https://atcoder.jp/contests/" + contest + "/submissions?f.Task=" + problem_id + "&f.LanguageName=&f.Status=" + status + "&f.User=" + username;
+    logger.debug(url)
     try {
         const response = await fetch(
             url, {

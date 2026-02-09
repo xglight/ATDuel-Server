@@ -10,8 +10,9 @@ import logger from '../logger.mjs';
  * @param {string} problemName 题目名称
  * @param {Array} subdata 提交记录数据
  * @param {string} startTime 比赛开始时间
+ * @param {string} problemContest 题目所属比赛名 (可选)
  */
-async function processTeamSubmissions(team, problemName, subdata, startTime) {
+async function processTeamSubmissions(team, problemName, subdata, startTime, problemContest) {
     if (!team) return;
     for (const member of team) {
         const username = typeof member === 'string' ? member : member.name;
@@ -25,7 +26,8 @@ async function processTeamSubmissions(team, problemName, subdata, startTime) {
                 body: JSON.stringify({
                     username: ATName,
                     problem_id: problemName,
-                    startTime: startTime
+                    startTime: startTime,
+                    contest: problemContest
                 })
             });
             const data = await res.json();
@@ -39,7 +41,7 @@ async function processTeamSubmissions(team, problemName, subdata, startTime) {
 
                 const tmp = {
                     task: problemName,
-                    username: submission.username,
+                    username: username, // 使用本地用户名而不是 ATName
                     status: submission.status,
                     time: submission.time
                 };
@@ -95,6 +97,25 @@ async function submission_update(ctx, next) {
 
         const contest = contestRows[0];
 
+        // 如果比赛已经结束，只同步提交记录，不更新分数
+        const isContestEnded = contest.status === 2;
+
+        // 校验题目是否属于该比赛，并获取题目所属的 AtCoder 比赛名
+        const [problemRows] = await pool.query(
+            `SELECT cp.*, p.contest as problem_contest 
+             FROM contest_problems cp 
+             LEFT JOIN problem p ON cp.problem_id = p.id 
+             WHERE cp.contest_id = ? AND cp.title = ?`,
+            [contest.id, problemTitle]
+        );
+        if (problemRows.length === 0) {
+            ctx.status = 200;
+            ctx.body = { success: false, error: '该题目不属于此比赛' };
+            return;
+        }
+
+        const problemContest = problemRows[0].problem_contest;
+
         // 验证用户是否为比赛成员
         const [teamRows] = await pool.query('SELECT team_label FROM contest_teams WHERE contest_id = ? AND username = ?', [contest.id, username]);
         if (teamRows.length === 0) {
@@ -103,7 +124,7 @@ async function submission_update(ctx, next) {
             return;
         }
 
-        logger.info(`submission_update: Updating submissions: ${problemName} by ${username}`);
+        logger.info(`submission_update: Updating submissions: ${problemName} (Contest: ${problemContest || 'N/A'}) by ${username}`);
 
         // 获取比赛队伍信息
         const [teams] = await pool.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contest.id]);
@@ -114,13 +135,12 @@ async function submission_update(ctx, next) {
 
         // 处理两队提交记录，传入 contest.startTime 避免全局变量冲突
         await Promise.all([
-            processTeamSubmissions(teamA, problemName, subdata, contest.startTime),
-            processTeamSubmissions(teamB, problemName, subdata, contest.startTime)
+            processTeamSubmissions(teamA, problemName, subdata, contest.startTime, problemContest),
+            processTeamSubmissions(teamB, problemName, subdata, contest.startTime, problemContest)
         ]);
 
-        // 更新数据库
+        // 更新数据库中的提交记录
         for (const sub of subdata) {
-            // 检查是否已存在
             const [existing] = await pool.query(
                 'SELECT id FROM contest_submissions WHERE contest_id = ? AND username = ? AND task_title = ? AND submission_time = ?',
                 [contest.id, sub.username, sub.task, sub.time]
@@ -136,6 +156,51 @@ async function submission_update(ctx, next) {
                     'INSERT INTO contest_submissions (contest_id, username, task_title, status, submission_time) VALUES (?, ?, ?, ?, ?)',
                     [contest.id, sub.username, sub.task, sub.status, sub.time]
                 );
+            }
+        }
+
+        // 检查是否有新的 AC 并更新题目状态及分数
+        // 只有当前题目未被解决且比赛未结束时才需要检查
+        if (problemRows[0].status === 0 && !isContestEnded) {
+            const acSubmissions = subdata.filter(s => s.status === 'AC');
+            if (acSubmissions.length > 0) {
+                // 按提交时间排序，找到最早的 AC
+                acSubmissions.sort((a, b) => new Date(a.time) - new Date(b.time));
+                const firstAC = acSubmissions[0];
+
+                // 获取该用户的团队信息
+                const userTeam = teams.find(t => t.username === firstAC.username);
+                if (userTeam) {
+                    const scoreToAdd = problemRows[0].score;
+
+                    // 1. 更新题目状态
+                    await pool.query(
+                        'UPDATE contest_problems SET status = 1, acuser = ? WHERE contest_id = ? AND title = ?',
+                        [firstAC.username, contest.id, problemTitle]
+                    );
+
+                    // 2. 更新队伍总分
+                    const scoreField = userTeam.team_label === 'A' ? 'scorea' : 'scoreb';
+                    await pool.query(
+                        `UPDATE contest SET ${scoreField} = ${scoreField} + ? WHERE id = ?`,
+                        [scoreToAdd, contest.id]
+                    );
+
+                    // 3. 更新该用户的个人分数
+                    await pool.query(
+                        'UPDATE contest_participants SET score = score + ? WHERE contest_id = ? AND username = ?',
+                        [scoreToAdd, contest.id, firstAC.username]
+                    );
+
+                    logger.info(`submission_update: Problem "${problemTitle}" solved by ${firstAC.username} for Team ${userTeam.team_label}`);
+
+                    // 广播比赛更新
+                    ctx.app.emit('broadcast', {
+                        type: 'contest_update',
+                        contestId: contestId,
+                        action: 'score_updated'
+                    });
+                }
             }
         }
 

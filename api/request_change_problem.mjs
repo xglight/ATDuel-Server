@@ -32,9 +32,9 @@ async function requestChangeProblem(ctx, next) {
     const dbContestId = contest.id;
 
     if (contest.status === 2) {
-         ctx.status = 200;
-         ctx.body = { success: false, error: '比赛已结束' };
-         return;
+        ctx.status = 200;
+        ctx.body = { success: false, error: '比赛已结束' };
+        return;
     }
 
     // 检查当前是否已有进行中的请求
@@ -95,7 +95,7 @@ async function requestChangeProblem(ctx, next) {
 
     const newRequest = requestStore.create(contestId, requestData, onExpire);
 
-    logger.info(`request_change_problem: User ${username} (Team ${userTeam}) requested to change problem ${problemId} in contest ${contestId}`);
+    logger.debug(`request_change_problem: User ${username} (Team ${userTeam}) requested to change problem ${problemId} in contest ${contestId}`);
 
     // 广播请求消息
     ctx.app.emit('broadcast', {

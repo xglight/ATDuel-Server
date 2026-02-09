@@ -9,7 +9,8 @@ import bcrypt from 'bcrypt';
 import mysql from 'mysql2/promise';
 import config from '../config.mjs';
 import { tableDefinitions } from '../table_definitions.mjs';
-import problem from './problem.mjs';
+// 移除顶层导入，避免在初始化时触发 db.mjs 的自动检查
+// import problem from './problem.mjs';
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -251,6 +252,10 @@ const problemCommands = {
         await new Promise(resolve => setTimeout(resolve, 1000));
         let username = await question('请输入 Clist 用户名: ');
         let api_key = await question('请输入 Clist API 密钥: ');
+
+        // 动态导入 problem 模块
+        const problemModule = await import('./problem.mjs');
+        const problem = problemModule.default;
         await problem.update(username, api_key);
     }
 }

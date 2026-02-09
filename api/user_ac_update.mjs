@@ -12,26 +12,36 @@ export async function updateUserAC(username) {
     const now = Math.floor(new Date().getTime() / 1000);
     const baseUrl = 'https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user=' + username + '&from_second=';
 
-    let lastUpdate = rows[0].acLastUpdate;
+    let lastUpdate = rows[0].acLastUpdate || 0;
     let url = baseUrl + lastUpdate;
+    let iterations = 0;
+    const MAX_ITERATIONS = 100; // 安全阈值，防止 API 异常导致的无限循环
 
-    while (true) {
+    while (iterations < MAX_ITERATIONS) {
+        iterations++;
         try {
             const response = await fetch(url);
-            const data = await response.json();
-            if (data.length === 0) {
+            if (!response.ok) {
+                logger.error(`updateUserAC: API returned status ${response.status} for user ${username}`);
                 break;
             }
+            const data = await response.json();
+
+            // 确保 data 是数组且不为空
+            if (!Array.isArray(data) || data.length === 0) {
+                break;
+            }
+
+            let newLastUpdate = lastUpdate;
             for (const item of data) {
+                const ts = parseInt(item.epoch_second);
+                if (!isNaN(ts)) {
+                    newLastUpdate = Math.max(newLastUpdate, ts);
+                }
+
                 if (item.result === 'AC') {
                     const name = item.problem_id;
                     try {
-                        const [rows] = await pool.query(
-                            'SELECT * FROM user_problem_accept WHERE username = ? AND problem_id = ?'
-                            , [username, name]);
-                        if (rows.length > 0) {
-                            continue;
-                        }
                         await pool.execute(
                             'INSERT IGNORE INTO user_problem_accept (username, problem_id) VALUES (?,?)'
                             , [username, name]);
@@ -39,8 +49,15 @@ export async function updateUserAC(username) {
                         logger.error('Failed to insert data:', error);
                     }
                 }
-                lastUpdate = Math.max(lastUpdate, item.epoch_second + 1);
             }
+
+            // 如果时间戳没有推进，说明可能卡在同一秒的大量提交中，强制推进 1 秒
+            if (newLastUpdate === lastUpdate) {
+                lastUpdate++;
+            } else {
+                lastUpdate = newLastUpdate;
+            }
+
             url = baseUrl + lastUpdate;
         } catch (err) {
             logger.error(`updateUserAC: Failed to fetch submissions for user ${username}: ${err.message}`);
@@ -50,7 +67,7 @@ export async function updateUserAC(username) {
 
     await pool.execute(
         'UPDATE user SET acLastUpdate = ? WHERE username = ?'
-        , [now, username]);
+        , [lastUpdate, username]);
     return { success: true };
 }
 

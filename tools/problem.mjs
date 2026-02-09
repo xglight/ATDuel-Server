@@ -4,7 +4,6 @@ import pool from '../db.mjs';
 import axios from 'axios';
 import logger from '../logger.mjs';
 
-
 async function getProblem(url) {
     logger.info("Fetching data:", url);
     try {
@@ -25,21 +24,39 @@ async function getProblem(url) {
             const problemurl = problem.url;
             const name = problemurl.split('/').pop();
             const title = problemurl.split('/').pop() + ' - ' + problem.name;
+            const contest = problemurl.replace('https://atcoder.jp/contests/', '').split('/')[0];
             if (rows.length > 0) {
-                logger.info("Data already exists, updating difficulty:", id, title, difficulty);
-                await pool.execute('UPDATE problem SET difficulty = ? WHERE id = ?', [difficulty, id]);
+                logger.info("Data already exists, updating difficulty and contest:", id, title, difficulty, contest);
+                await pool.execute('UPDATE problem SET difficulty = ?, contest = ? WHERE id = ?', [difficulty, contest, id]);
                 continue;
             }
-            logger.info("Inserting data:", id, name, difficulty, problemurl, title);
+            logger.info("Inserting data:", id, name, difficulty, problemurl, title, contest);
             try {
                 await pool.execute(
-                    'INSERT INTO problem (id, problem_id, difficulty, url, title) VALUES (?,?,?,?,?)'
-                    , [id, name, difficulty, problemurl, title]);
+                    'INSERT INTO problem (id, problem_id, difficulty, url, title, contest) VALUES (?,?,?,?,?,?)'
+                    , [id, name, difficulty, problemurl, title, contest]);
             } catch (error) {
                 logger.error('Failed to insert data:', error);
             }
         }
         return new_url;
+    } catch (error) {
+        logger.error('API request failed:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message
+        });
+        return -1;
+    }
+}
+
+const problemDifficulty = {};
+
+async function initProblemDifficulty() {
+    const url = "https://kenkoooo.com/atcoder/resources/problem-models.json";
+    try {
+        const response = await axios.get(url);
+        problemDifficulty = response.data;
     } catch (error) {
         logger.error('API request failed:', {
             status: error.response?.status,
