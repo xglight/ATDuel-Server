@@ -1,0 +1,34 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+      - "status:triage"
+      - "status:discussion"
+      - "status:under-review"
+      - "status:on-hold"
+  categories:
+    - title: "✨ 新功能 (Features)"
+      labels:
+        - enhancement
+        - feature
+    - title: "🐛 修复 (Bug Fixes)"
+      labels:
+        - bug
+    - title: "🔒 安全加固 (Security)"
+      labels:
+        - security
+    - title: "⚡ 性能优化 (Performance)"
+      labels:
+        - performance
+    - title: "♻️ 代码重构 (Refactor)"
+      labels:
+        - refactor
+    - title: "📖 文档更新 (Documentation)"
+      labels:
+        - documentation
+    - title: "📦 依赖更新 (Dependencies)"
+      labels:
+        - dependencies
+    - title: "🔄 其他更改 (Other Changes)"
+      labels:
+        - "*"
