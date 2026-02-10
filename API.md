@@ -1105,11 +1105,12 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名  |  类型  | 必填  | 描述         |
-| :-----: | :----: | :---: | :----------- |
-|  token  | string |  是   | 管理员 token |
-|  title  | string |  是   | 公告标题     |
-| content | string |  是   | 公告内容     |
+| 参数名  |  类型  | 必填  | 描述                                     |
+| :-----: | :----: | :---: | :--------------------------------------- |
+|  token  | string |  是   | 管理员 token                             |
+|  title  | string |  是   | 公告标题                                 |
+| content | string |  是   | 公告内容                                 |
+|  date   | string |  否   | 发布日期 (ISO 格式, 如 `2024-01-01T12:00`) |
 
 #### 返回值
 
@@ -1119,6 +1120,33 @@ function copyApiDoc() {
 |  400   | json  | { success: false, message: "标题、内容和 Token 均不能为空" } |
 |  401   | json  | { success: false, message: "管理员权限校验失败" }            |
 |  500   | json  | { success: false, message: "服务器内部错误" }                |
+
+---
+
+### POST /admin/bulletin_update
+
+#### 说明
+
+管理员更新现有公告。
+
+#### 请求参数
+
+| 参数名  |  类型  | 必填  | 描述                                     |
+| :-----: | :----: | :---: | :--------------------------------------- |
+|  token  | string |  是   | 管理员 token                             |
+|   id    |  int   |  是   | 公告 ID                                  |
+|  title  | string |  是   | 公告标题                                 |
+| content | string |  是   | 公告内容                                 |
+|  date   | string |  否   | 发布日期 (ISO 格式, 如 `2024-01-01T12:00`) |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                  |
+| :----: | :---: | :---------------------------------------------------- |
+|  200   | json  | { success: true, message: "公告已更新" }              |
+|  400   | json  | { success: false, message: "ID 和 Token 均不能为空" } |
+|  401   | json  | { success: false, message: "管理员权限校验失败" }     |
+|  500   | json  | { success: false, message: "服务器内部错误" }         |
 
 ---
 

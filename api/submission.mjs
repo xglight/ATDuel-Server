@@ -28,15 +28,17 @@ async function submission(ctx) {
         }
 
         const contest = contestRows[0];
-        const offset = (parseInt(page) - 1) * parseInt(pageSize);
-        const limit = parseInt(pageSize);
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const pageSizeNum = Math.max(1, Math.min(100, parseInt(pageSize) || 10));
+        const offset = (pageNum - 1) * pageSizeNum;
+        const limit = pageSizeNum;
 
-        logger.info(`submission: 正在获取比赛提交列表: ${contestId}, 页码: ${page}, 每页数量: ${pageSize}`);
+        logger.info(`submission: 正在获取比赛提交列表: ${contestId}, 页码: ${pageNum}, 每页数量: ${pageSizeNum}`);
 
         // 并行查询总数和分页数据
         const [totalResult, submissionsResult] = await Promise.all([
-            pool.execute('SELECT COUNT(*) as total FROM contest_submissions WHERE contest_id = ?', [contest.id]),
-            pool.execute(
+            pool.query('SELECT COUNT(*) as total FROM contest_submissions WHERE contest_id = ?', [contest.id]),
+            pool.query(
                 'SELECT username, task_title as task, status, submission_time as time FROM contest_submissions WHERE contest_id = ? ORDER BY submission_time DESC LIMIT ? OFFSET ?',
                 [contest.id, limit, offset]
             )
@@ -51,7 +53,7 @@ async function submission(ctx) {
             data: {
                 submissions,
                 total,
-                page: parseInt(page),
+                page: pageNum,
                 pageSize: limit
             }
         };

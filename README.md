@@ -1,71 +1,90 @@
 # ATDuel-Server
 
-ATDuel-Server 是 ATDuel 平台的后端核心，负责处理所有的业务逻辑、数据存储、AtCoder 数据同步以及比赛状态维护。
+ATDuel-Server 是 ATDuel 平台的后端核心。基于 Node.js 开发，它负责处理业务逻辑、数据持久化、AtCoder 数据同步、实时通信以及比赛状态管理。
 
-![](https://img.shields.io/badge/node-v22.13.1-blue) ![](https://img.shields.io/badge/npm-v11.1.0-blue)
+[![Node.js](https://img.shields.io/badge/node-v22.13.1-blue)](https://nodejs.org/)
+[![npm](https://img.shields.io/badge/npm-v11.1.0-blue)](https://www.npmjs.com/)
+[![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 
-## 说明
+## 🌟 核心特性
 
-采用 Node.js 环境下的 [Koa](https://koajs.com/) 框架开发，使用 [MySQL](https://www.mysql.com/) 作为持久化存储。
+- **RESTful API**: 提供完整的后端接口支持，驱动前端业务流。详见 [API.md](API.md)。
+- **AtCoder 深度集成**:
+  - **身份验证**: 通过 AtCoder Affiliation 验证用户身份。
+  - **数据抓取**: 自动获取用户头像、Rating 及所属团队。
+- **比赛与房间系统**:
+  - **实时通信**: 基于 WebSocket 的实时比赛状态更新、消息广播及聊天功能。
+- **Rating 体系**: 
+  - 针对团队对决优化的 ELO Rating 计算系统。
+  - 详细算法说明请参考 [RATING.md](RATING.md)。
+- **管理与安全**:
+  - **权限控制**: 基于 Token 的管理员认证体系。
+  - **审计日志**: 详细的操作日志记录与查询。
+  - **安全防护**: 密码采用 `bcrypt` 加密存储，多维度封禁机制（用户/IP）。
 
-## 核心功能
+## 📁 目录结构
 
-- **API 驱动**: 完整的 RESTful API 接口，详见 [API.md](API.md)。
-- **AtCoder 集成**:
-  - 自动获取用户头像、Rating 和所属团队信息。
-  - 实时爬取和更新用户的 Submission 记录。
-- **比赛逻辑**:
-  - 房间管理与比赛初始化。
-  - 自动判题与 AC 状态同步。
-  - 复杂的团队 ELO Rating 计算系统，详见 [RATING.md](RATING.md)。
-- **管理功能**:
-  - 管理员 Token 验证。
-  - 用户封禁/解封、系统日志查看、全局配置动态获取。
-- **安全性**: 采用 `bcrypt` 进行密码哈希存储，基于 `uuid` 的 Token 管理。
+```text
+ATDuel-Server/
+├── api/                # API 路由实现 (动态加载)
+├── tools/              # 辅助工具 (CLI, 数据迁移, 缓存管理)
+├── utils/              # 通用工具函数 (认证、加密等)
+├── server.mjs          # 服务器启动入口
+├── db.mjs              # 数据库连接池配置
+├── table_definitions.mjs # 数据库表结构定义
+├── config.mjs          # 全局配置管理
+├── logger.mjs          # 日志记录模块
+└── import_api.mjs      # 路由自动导入逻辑
+```
 
-## 目录结构
+## 🚀 本地部署
 
-- `api/`: 所有 API 接口的实现，采用动态路由加载机制。
-- `tools/`: 工具类代码，包括数据库初始化脚本、命令行工具、缓存管理等。
-- `db.mjs`: 数据库连接池配置。
-- `server.mjs`: 服务器入口，初始化 Koa 实例并加载中间件。
-- `table_definitions.mjs`: 数据库表结构定义。
+### 1. 准备工作
 
-## 本地部署
+确保环境已安装 Node.js (建议 v22+) 和 MySQL。
 
-### 1. 安装依赖
+### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. 配置环境
+### 3. 环境配置
 
-复制 `.env.example` 为 `.env` 并修改相关配置（数据库、服务器端口等）。
+复制 `.env.example` 为 `.env` 并填写相关信息：
 
-### 3. 初始化数据库
+```env
+DB_HOST=localhost
+DB_USER=your_user
+DB_PASSWORD=your_password
+DB_NAME=atduel
+SERVER_PORT=3000
+ADMIN_TOKEN=your_secret_admin_token
+```
 
-运行初始化脚本，该脚本会创建必要的表并提示你创建第一个管理员账号：
+### 4. 初始化数据库
+
+运行初始化脚本，它将自动创建表结构并引导你创建首个管理员账号：
 
 ```bash
 npm run init
 ```
 
-### 4. 启动服务
+### 5. 启动服务
 
 ```bash
-# 开发模式 (使用 nodemon)
+# 开发模式 (自动重载)
 npm run dev
 
 # 生产模式
 npm start
 ```
 
-## 文档参考
+## 📚 文档
 
-- **API 接口**: [API.md](API.md)
-- **Rating 算法**: [RATING.md](RATING.md)
+- [API 接口文档](API.md)
+- [Rating 算法详解](RATING.md)
 
-## 开源协议
+## 📄 开源协议
 
-本项目采用 [GPL-3.0](LICENSE) 协议。
+本项目基于 [GPL-3.0](LICENSE) 协议开源。

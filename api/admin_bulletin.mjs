@@ -7,7 +7,7 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function addBulletin(ctx) {
-    const { title, content, token } = ctx.request.body;
+    const { title, content, token, date } = ctx.request.body;
 
     if (!title || !content || !token) {
         ctx.status = 400;
@@ -22,15 +22,65 @@ async function addBulletin(ctx) {
     }
 
     try {
-        await pool.execute(
-            'INSERT INTO bulletin (title, content) VALUES (?, ?)',
-            [title, content]
-        );
+        const dbDate = date ? date.replace('T', ' ') : null;
+        if (dbDate) {
+            await pool.execute(
+                'INSERT INTO bulletin (title, content, created_at) VALUES (?, ?, ?)',
+                [title, content, dbDate]
+            );
+        } else {
+            await pool.execute(
+                'INSERT INTO bulletin (title, content) VALUES (?, ?)',
+                [title, content]
+            );
+        }
         logger.info(`admin_bulletin: 管理员发布了新公告: ${title}`);
         ctx.status = 200;
         ctx.body = { success: true, message: '公告已发布' };
     } catch (err) {
         logger.error(`admin_bulletin: 发布公告失败: ${err.message}`);
+        ctx.status = 500;
+        ctx.body = { success: false, message: '服务器内部错误' };
+    }
+}
+
+/**
+ * 更新公告
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function updateBulletin(ctx) {
+    const { id, title, content, token, date } = ctx.request.body;
+
+    if (!id || !title || !content || !token) {
+        ctx.status = 400;
+        ctx.body = { success: false, message: 'ID、标题、内容和 Token 均不能为空' };
+        return;
+    }
+
+    if (!(await verifyAdmin(token))) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '管理员权限校验失败' };
+        return;
+    }
+
+    try {
+        const dbDate = date ? date.replace('T', ' ') : null;
+        if (dbDate) {
+            await pool.execute(
+                'UPDATE bulletin SET title = ?, content = ?, created_at = ? WHERE id = ?',
+                [title, content, dbDate, id]
+            );
+        } else {
+            await pool.execute(
+                'UPDATE bulletin SET title = ?, content = ? WHERE id = ?',
+                [title, content, id]
+            );
+        }
+        logger.info(`admin_bulletin: 管理员更新了公告 ID: ${id}`);
+        ctx.status = 200;
+        ctx.body = { success: true, message: '公告已更新' };
+    } catch (err) {
+        logger.error(`admin_bulletin: 更新公告失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: '服务器内部错误' };
     }
@@ -74,5 +124,6 @@ async function deleteBulletin(ctx) {
 
 export default {
     'POST /admin/bulletin_add': addBulletin,
+    'POST /admin/bulletin_update': updateBulletin,
     'POST /admin/bulletin_delete': deleteBulletin
 };

@@ -1,3 +1,7 @@
+/**
+ * @file 日志管理模块
+ * 提供多级别的日志记录功能，支持控制台彩色输出和文件持久化
+ */
 import config from './config.mjs';
 import fs from 'fs';
 import path from 'path';
@@ -6,13 +10,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create logs directory if it doesn't exist
+// 确保日志目录存在
 const logDir = path.join(__dirname, 'logs');
 if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
 }
 
-// Generate a timestamped log file name
+/**
+ * 生成带时间戳的日志文件名
+ * @returns {string} 文件名
+ */
 const getLogFileName = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -27,6 +34,11 @@ const getLogFileName = () => {
 const logFile = path.join(logDir, getLogFileName());
 const logStream = fs.createWriteStream(logFile, { flags: 'a' });
 
+// 监听日志流错误
+logStream.on('error', (err) => {
+    console.error('Logger: Failed to write to log file:', err);
+});
+
 const levels = {
     fatal: 0,
     error: 1,
@@ -39,41 +51,59 @@ const levels = {
 const currentLevel = levels[config.logLevel] !== undefined ? levels[config.logLevel] : 3;
 
 const colors = {
-    trace: '\x1b[90m', // grey
-    debug: '\x1b[34m', // blue
-    info: '\x1b[32m',  // green
-    warn: '\x1b[33m',  // yellow
-    error: '\x1b[31m', // red
-    fatal: '\x1b[35m', // magenta
+    trace: '\x1b[90m', // 灰色
+    debug: '\x1b[34m', // 蓝色
+    info: '\x1b[32m',  // 绿色
+    warn: '\x1b[33m',  // 黄色
+    error: '\x1b[31m', // 红色
+    fatal: '\x1b[35m', // 紫色
     reset: '\x1b[0m'
 };
 
-const stripAnsi = (str) => str.replace(/[\u001b\u009b][[()#;?]*.{0,2}(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+/**
+ * 格式化参数为字符串
+ * @param {any} arg - 参数
+ * @returns {string}
+ */
+function formatArg(arg) {
+    if (arg instanceof Error) {
+        return arg.stack || arg.message;
+    }
+    if (typeof arg === 'object' && arg !== null) {
+        try {
+            return JSON.stringify(arg, null, 2);
+        } catch (e) {
+            return '[Unserializable Object]';
+        }
+    }
+    return String(arg);
+}
 
+/**
+ * 核心日志记录函数
+ * @param {string} level - 日志级别
+ * @param  {...any} args - 日志内容
+ */
 function log(level, ...args) {
     if (levels[level] > currentLevel) {
         return;
     }
-    const timestamp = new Date().toISOString();
+    const now = new Date();
+    const timestamp = now.toISOString();
     const color = colors[level] || colors.info;
     
-    // Log to console with colors
+    // 输出到控制台 (带颜色)
     console.log(`${color}[${timestamp}] [${level.toUpperCase()}]${colors.reset}`, ...args);
 
-    // Prepare message for file logging (without colors)
-    const fileMessage = `[${timestamp}] [${level.toUpperCase()}] ${args.map(arg => {
-        if (typeof arg === 'object' && arg !== null) {
-            try {
-                return JSON.stringify(arg);
-            } catch (e) {
-                return 'Unserializable Object';
-            }
-        }
-        return String(arg);
-    }).join(' ')}\n`;
+    // 写入文件 (不带颜色)
+    const fileMessage = `[${timestamp}] [${level.toUpperCase()}] ${args.map(formatArg).join(' ')}\n`;
     
-    // Write to log file
-    logStream.write(stripAnsi(fileMessage));
+    // 使用 setImmediate 避免阻塞主线程
+    setImmediate(() => {
+        if (logStream.writable) {
+            logStream.write(fileMessage);
+        }
+    });
 }
 
 export default {
