@@ -87,6 +87,21 @@ npm start
 - [API 接口文档](API.md)
 - [Rating 算法详解](RATING.md)
 
+## 🤝 如何参与
+
+我们欢迎各种形式的贡献！你可以通过以下方式参与本项目：
+
+1.  **提交 Issue**: 报告 Bug、提出新功能建议或询问问题。
+2.  **提交 Pull Request**:
+    - Fork 本仓库。
+    - 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)。
+    - 提交你的更改 (`git commit -m 'Add some AmazingFeature'`)。
+    - 将更改推送到分支 (`git push origin feature/AmazingFeature`)。
+    - 开启一个 Pull Request。
+3.  **完善文档**: 修复文档中的错误或补充缺失的内容。
+
+在参与贡献前，请确保你的代码符合项目的编码规范，并尽可能添加必要的测试。
+
 ## 📄 开源协议
 
 本项目基于 [GPL-3.0](LICENSE) 协议开源。
