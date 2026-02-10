@@ -177,12 +177,15 @@ async function submission_update(ctx) {
 
                 // 检查是否有新的 AC 并更新题目状态及分数
                 // 只有当前题目未被解决且比赛未结束时才需要检查
+                let scoreUpdatedSuccessfully = false;
+                let firstAC = null;
+
                 if (problemRows[0].status === 0 && !isContestEnded) {
                     const acSubmissions = subdata.filter(s => s.status === 'AC');
                     if (acSubmissions.length > 0) {
                         // 按提交时间排序，找到最早的 AC
                         acSubmissions.sort((a, b) => new Date(a.time) - new Date(b.time));
-                        const firstAC = acSubmissions[0];
+                        firstAC = acSubmissions[0];
 
                         // 1. 尝试更新题目状态（增加 status = 0 条件防止重复更新）
                         const [updateProblemRes] = await conn.execute(
@@ -210,6 +213,7 @@ async function submission_update(ctx) {
                                     [scoreToAdd, contest.id, firstAC.username]
                                 );
 
+                                scoreUpdatedSuccessfully = true;
                                 logger.info(`submission_update: 题目 "${problemTitle}" 被 ${firstAC.username} (队伍 ${userTeam.team_label}) 解决`);
                             }
                         }
@@ -219,20 +223,17 @@ async function submission_update(ctx) {
                 await conn.commit();
 
                 // 如果有 AC 且成功更新，则广播
-                if (problemRows[0].status === 0 && !isContestEnded) {
-                    const acSubmissions = subdata.filter(s => s.status === 'AC');
-                    if (acSubmissions.length > 0) {
-                        ctx.app.emit('broadcast', {
-                            type: 'contest_update',
-                            contestId: contestId,
-                            action: 'score_updated',
-                            data: {
-                                problemTitle: problemTitle,
-                                status: 1,
-                                acuser: acSubmissions[0].username
-                            }
-                        });
-                    }
+                if (scoreUpdatedSuccessfully && firstAC) {
+                    ctx.app.emit('broadcast', {
+                        type: 'contest_update',
+                        contestId: contestId,
+                        action: 'score_updated',
+                        data: {
+                            problemTitle: problemTitle,
+                            status: 1,
+                            acuser: firstAC.username
+                        }
+                    });
                 }
 
             } catch (err) {

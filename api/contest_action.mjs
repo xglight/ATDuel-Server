@@ -103,7 +103,7 @@ async function requestContestAction(ctx) {
                 result = await finalizeContest(contestId, false, opponentTeam);
             }
 
-            if (result.success) {
+            if (result.success && result.message !== '比赛已经结算') {
                 const msg = type === 'draw' ? `平局请求已通过。` : `队伍 ${userTeamLabel} 已确认认输。`;
 
                 // 1. 先广播操作结果
@@ -130,6 +130,10 @@ async function requestContestAction(ctx) {
 
                 ctx.status = 200;
                 ctx.body = { success: true, message: '操作已处理' };
+                return;
+            } else if (result.success && result.message === '比赛已经结算') {
+                ctx.status = 200;
+                ctx.body = { success: true, message: '比赛已经结算' };
                 return;
             }
         }
@@ -273,7 +277,7 @@ async function voteContestAction(ctx) {
                     result = await finalizeContest(contestId, false, opponentTeam);
                 }
 
-                if (result.success) {
+                if (result.success && result.message !== '比赛已经结算') {
                     const msg = ongoingAction.type === 'draw' ? `平局请求已通过。` : `队伍 ${ongoingAction.requesterTeam} 已确认认输。`;
 
                     ctx.app.emit('broadcast', {

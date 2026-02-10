@@ -18,8 +18,8 @@ export async function finalizeContest(contestId, forceDraw = false, winnerTeam =
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
-        // 查询比赛信息
-        const [rows] = await conn.execute('SELECT * FROM contest WHERE url = ? LIMIT 1', [contestId]);
+        // 查询比赛信息并加锁，防止并发结算
+        const [rows] = await conn.execute('SELECT * FROM contest WHERE url = ? LIMIT 1 FOR UPDATE', [contestId]);
 
         if (rows.length === 0) {
             await conn.rollback();

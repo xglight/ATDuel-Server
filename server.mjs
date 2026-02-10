@@ -204,7 +204,7 @@ async function main() {
                     // 这里不再追加 Rating 信息，让其由 contest_update 独立生成
                 } else if (message.type === 'contest_update' && message.status === 2) {
                     // 无论是否开启 rated，只要比赛状态变为 2 (已结束)，始终生成结束消息
-                    let systemMsgContent = '比赛已结束！\nRating 变动如下：';
+                    let systemMsgContent = (message.data && message.data.message) ? `${message.data.message}\nRating 变动如下：` : '比赛已结束！\nRating 变动如下：';
                     if (message.ratingChanges && Object.keys(message.ratingChanges).length > 0) {
                         for (const [username, change] of Object.entries(message.ratingChanges)) {
                             const deltaStr = change.delta >= 0 ? `+${change.delta}` : `${change.delta}`;
@@ -264,15 +264,11 @@ async function main() {
                     try {
                         const history = await getRoomMessages(roomId);
                         if (history && history.length > 0) {
-                            history.forEach(msg => {
-                                ws.send(JSON.stringify({
-                                    type: 'room_chat',
-                                    roomId: roomId,
-                                    sender: msg.sender,
-                                    message: msg.message,
-                                    timestamp: msg.timestamp
-                                }));
-                            });
+                            ws.send(JSON.stringify({
+                                type: 'room_history',
+                                roomId: roomId,
+                                history: history
+                            }));
                         }
                     } catch (error) {
                         logger.error('ws: Failed to fetch room history: ', error);
@@ -531,33 +527,15 @@ async function main() {
                     logger.info(`server: Contest ${contest.url} timed out, forcing finalize (draw)...`);
                     try {
                         const result = await finalizeContest(contest.url, true);
-                        if (result.success) {
-                            // 广播比赛结束消息
-                            const endMessage = {
+                        if (result.success && result.message !== '比赛已经结算') {
+                            // 广播比赛结束消息，触发系统消息生成和持久化
+                            app.emit('broadcast', {
                                 type: 'contest_update',
                                 contestId: contest.url,
                                 action: 'end',
                                 status: 2,
                                 data: { message: '比赛已达最大时长，强制结束' },
-                                timestamp: new Date().toISOString()
-                            };
-                            broadcastToContest(contest.url, endMessage);
-
-                            // 发送系统消息
-                            let systemMsgContent = '比赛已达最大时长，强制结束！\nRating 变动如下：';
-                            if (result.ratingChanges && Object.keys(result.ratingChanges).length > 0) {
-                                for (const [username, change] of Object.entries(result.ratingChanges)) {
-                                    const deltaStr = change.delta >= 0 ? `+${change.delta}` : `${change.delta}`;
-                                    systemMsgContent += `\n${username}: ${change.oldRating} -> ${change.newRating} (${deltaStr})`;
-                                }
-                            } else {
-                                systemMsgContent += '\nRating 将不会被计算。';
-                            }
-
-                            broadcastToContest(contest.url, {
-                                type: 'system_message',
-                                contestId: contest.url,
-                                message: systemMsgContent,
+                                ratingChanges: result.ratingChanges,
                                 timestamp: new Date().toISOString()
                             });
                         }

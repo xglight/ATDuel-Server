@@ -3,21 +3,34 @@ import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
 /**
+ * 存储房间消息
+ * @param {string} roomUrl 房间URL
+ * @param {string} sender 发送者
+ * @param {string} message 消息内容
+ */
+async function storeRoomMessage(roomUrl, sender, message) {
+    await pool.query(
+        'INSERT INTO room_messages (room_url, sender, message) VALUES (?,?,?)',
+        [roomUrl, sender, message]
+    );
+}
+
+/**
  * 更新房间成员接口 (加入/退出)
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function updateRoomUser(ctx) {
-    const { roomId: roomUrl, op: operation, team: targetTeam, username, token } = ctx.request.body;
+    const { roomId: roomUrl, op: operation, team: targetTeam, username, token, targetUsername } = ctx.request.body;
     const position = ctx.request.body.pos || 0;
 
     // 参数验证
-    if (!roomUrl || operation === undefined || targetTeam === undefined || !username || !token) {
+    if (!roomUrl || operation === undefined || (operation !== 2 && targetTeam === undefined) || !username || !token) {
         ctx.status = 400;
         ctx.body = { success: false, message: '缺少必要参数' };
         return;
     }
 
-    logger.debug(`room_user_update: 正在更新成员信息, 用户: ${username}, 房间: ${roomUrl}, 操作: ${operation}, 队伍: ${targetTeam}, 位置: ${position}`);
+    logger.debug(`room_user_update: 正在更新成员信息, 用户: ${username}, 房间: ${roomUrl}, 操作: ${operation}, 队伍: ${targetTeam}, 位置: ${position}, 目标用户: ${targetUsername}`);
 
     let conn;
     try {
@@ -38,7 +51,7 @@ async function updateRoomUser(ctx) {
         }
 
         // 获取房间信息和锁
-        const [rows] = await conn.execute('SELECT id, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count FROM room WHERE url = ? FOR UPDATE', [roomUrl]);
+        const [rows] = await conn.execute('SELECT id, master, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count FROM room WHERE url = ? FOR UPDATE', [roomUrl]);
         if (rows.length === 0) {
             ctx.status = 404;
             ctx.body = { success: false, message: '未找到该房间' };
@@ -125,6 +138,51 @@ async function updateRoomUser(ctx) {
                 place: position,
                 ready: false
             };
+        } else if (operation === 2) { // 踢出
+            // 校验权限：只有房主可以踢人
+            if (roomData.master !== username) {
+                ctx.status = 403;
+                ctx.body = { success: false, message: '只有房主可以踢出成员' };
+                await conn.rollback();
+                return;
+            }
+
+            if (!targetUsername) {
+                ctx.status = 400;
+                ctx.body = { success: false, message: '未指定目标用户' };
+                await conn.rollback();
+                return;
+            }
+
+            if (targetUsername === roomData.master) {
+                ctx.status = 400;
+                ctx.body = { success: false, message: '不能踢出房主自己' };
+                await conn.rollback();
+                return;
+            }
+
+            // 执行删除
+            await conn.execute(
+                'DELETE FROM room_participants WHERE room_id = ? AND username = ?',
+                [roomData.id, targetUsername]
+            );
+
+            // 更新本地副本
+            if (userMap[targetUsername]) {
+                const targetTeamLabel = currentTeams.A.includes(targetUsername) ? 'A' : 'B';
+                currentTeams[targetTeamLabel] = currentTeams[targetTeamLabel].filter(n => n !== targetUsername);
+                delete userMap[targetUsername];
+            }
+
+            // 持久化踢出通知
+            await storeRoomMessage(roomUrl, '系统', `成员 ${targetUsername} 已被踢出房间`);
+
+            // 广播踢出通知
+            ctx.app.emit('broadcast', {
+                type: 'room_kicked',
+                roomId: roomUrl,
+                targetUsername: targetUsername
+            });
         }
 
         // 更新房间最后更新时间
