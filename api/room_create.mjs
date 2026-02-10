@@ -25,7 +25,7 @@ function randomString(length) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function createRoom(ctx) {
-    const { username, token, playerCount, ratingMin, ratingMax, problemCount, isRated } = ctx.request.body;
+    const { username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated } = ctx.request.body;
 
     // 参数验证
     if (!username || !token) {
@@ -56,8 +56,8 @@ async function createRoom(ctx) {
             url: roomUrl,
             master: username,
             setting_mode: playerCount || '1v1',
-            setting_rating_lowest: ratingMin || 0,
-            setting_rating_highest: ratingMax || 4000,
+            setting_rating_lowest: difficultyMin !== undefined ? difficultyMin : -1500,
+            setting_rating_highest: difficultyMax !== undefined ? difficultyMax : 4400,
             setting_problem_count: problemCount || config.content.problemCountLowerLimit,
             rated: isRated ? 1 : 0,
             last_updated: now

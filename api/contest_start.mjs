@@ -146,15 +146,15 @@ async function startContest(ctx) {
 
         const contestId = roomData.id;
         const master = roomData.master;
-        const maxRating = roomData.setting_rating_highest ?? 3000;
-        const minRating = roomData.setting_rating_lowest ?? 0;
+        const maxDifficulty = roomData.setting_rating_highest ?? 4400;
+        const minDifficulty = roomData.setting_rating_lowest ?? -1500;
         const problemCount = roomData.setting_problem_count ?? 5;
         const rated = !!roomData.rated;
 
-        logger.debug(`contest_start: 正在选择 ${problemCount} 道题目 [${minRating}, ${maxRating}]`);
+        logger.debug(`contest_start: 正在选择 ${problemCount} 道题目 [${minDifficulty}, ${maxDifficulty}]`);
 
         // 5. 获取符合条件的题目，排除 AHC 和已 AC 的题目
-        const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minRating, maxRating]);
+        const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minDifficulty, maxDifficulty]);
         const acceptedProblems = await getAcceptedProblems(allUsernames);
 
         const filteredProblems = allProblems.filter(p => {
@@ -166,12 +166,12 @@ async function startContest(ctx) {
 
         if (filteredProblems.length < problemCount) {
             ctx.status = 400;
-            ctx.body = { success: false, message: '在此难度范围内找不到足够的适用题目' };
+            ctx.body = { success: false, message: `在难度范围 [${minDifficulty}, ${maxDifficulty}] 内找不到足够的适用题目（当前可用: ${filteredProblems.length}，需要: ${problemCount}）` };
             return;
         }
 
         // 6. 选择题目
-        const selectedProblems = await selectProblems(filteredProblems, problemCount, minRating, maxRating);
+        const selectedProblems = await selectProblems(filteredProblems, problemCount, minDifficulty, maxDifficulty);
 
         // 分配分数 (100, 200, 300...)
         selectedProblems.forEach((p, index) => {

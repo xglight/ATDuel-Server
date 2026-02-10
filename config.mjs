@@ -73,6 +73,8 @@ const CONTENT_CONFIG = {
     peopleLimit: getEnv('CONTENT_PEOPLE_LIMIT', 3),
     problemCountLowerLimit: getEnv('CONTENT_PROBLEM_COUNT_LOWER_LIMIT', 1),
     problemCountUpperLimit: getEnv('CONTENT_PROBLEM_COUNT_UPPER_LIMIT', 10),
+    problemDifficultyLowerLimit: getEnv('CONTENT_PROBLEM_DIFFICULTY_LOWER_LIMIT', -1500),
+    problemDifficultyUpperLimit: getEnv('CONTENT_PROBLEM_DIFFICULTY_UPPER_LIMIT', 4400),
     timeLimit: getEnv('CONTENT_TIME_LIMIT', 86400)
 };
 
