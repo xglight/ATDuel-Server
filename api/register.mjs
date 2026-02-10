@@ -27,6 +27,9 @@ async function register(ctx) {
     logger.debug(`register: 正在尝试注册用户: ${username} (AtCoder: ${ATName})`);
 
     try {
+        // 0. 解码 Base64 密码
+        const decodedPassword = Buffer.from(password, 'base64').toString();
+
         // 1. 并行检查用户名和 AtCoder 名是否已存在
         const [existingUsers, existingAtNames] = await Promise.all([
             pool.execute('SELECT 1 FROM user WHERE username = ? LIMIT 1', [username]),
@@ -68,7 +71,7 @@ async function register(ctx) {
         }
 
         // 4. 加密密码并保存用户
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(decodedPassword, 10);
         await pool.execute(
             'INSERT INTO user (username, password, ATName, rating, avatar) VALUES (?, ?, ?, ?, ?)',
             [username, hashedPassword, ATName, rating, avatar || '']

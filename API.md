@@ -119,6 +119,31 @@ function copyApiDoc() {
 
 ---
 
+### POST /find_password
+
+#### 说明
+
+找回密码。通过验证 AtCoder 账号的 Affiliation 字段（需填入指定的 verifyToken）来重置密码。
+
+#### 请求参数
+
+|   参数名    |  类型  | 必填  | 描述                 |
+| :---------: | :----: | :---: | :------------------- |
+|  username   | string |  是   | 用户名               |
+|   ATName    | string |  是   | AtCoder 用户名       |
+| newPassword | string |  是   | 新密码 (Base64 编码) |
+| verifyToken | string |  是   | 验证用的 Token       |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                         |
+| :----: | :---: | :----------------------------------------------------------- |
+|  200   | json  | { success: true, message: "密码重置成功，请使用新密码登录" } |
+|  400   | json  | { success: false, message: "参数缺失、不匹配或校验码错误" }  |
+|  500   | json  | { success: false, message: "服务器内部错误" }                |
+
+---
+
 ### POST /register
 
 #### 说明
