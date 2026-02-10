@@ -16,7 +16,8 @@ import logger from '../logger.mjs';
 async function processTeamSubmissions(team, problemName, subdata, startTime, problemContest) {
     if (!team || !team.length) return;
 
-    await Promise.all(team.map(async (member) => {
+    // 改为串行处理，减轻对 AtCoder 的请求压力
+    for (const member of team) {
         const username = typeof member === 'string' ? member : member.name;
         try {
             const atNameRes = await fetch(config.buildApiUrl(`/atname/${username}`)).then(res => res.json());
@@ -62,7 +63,7 @@ async function processTeamSubmissions(team, problemName, subdata, startTime, pro
         } catch (err) {
             logger.error(`submission_update: 处理用户 ${username} 的提交记录失败: ${err.message}`);
         }
-    }));
+    }
 }
 
 /**

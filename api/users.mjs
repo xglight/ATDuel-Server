@@ -57,7 +57,7 @@ async function getUsers(ctx) {
             isBanned: bannedUsernames.has(user.username)
         }));
 
-        logger.info(`getUsers: 成功获取 ${result.length} 个用户`);
+        logger.debug(`getUsers: 成功获取 ${result.length} 个用户`);
         ctx.status = 200;
         ctx.body = { success: true, data: result };
 

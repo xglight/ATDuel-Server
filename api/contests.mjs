@@ -107,7 +107,7 @@ async function contests(ctx) {
             rated: row.rated
         }));
 
-        logger.info(`contests: 成功获取 ${result.length} 个比赛`);
+        logger.debug(`contests: 成功获取 ${result.length} 个比赛`);
 
         ctx.status = 200;
         ctx.body = {

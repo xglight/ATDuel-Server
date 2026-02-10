@@ -33,7 +33,7 @@ async function submission(ctx) {
         const offset = (pageNum - 1) * pageSizeNum;
         const limit = pageSizeNum;
 
-        logger.info(`submission: 正在获取比赛提交列表: ${contestId}, 页码: ${pageNum}, 每页数量: ${pageSizeNum}`);
+        logger.debug(`submission: 正在获取比赛提交列表: ${contestId}, 页码: ${pageNum}, 每页数量: ${pageSizeNum}`);
 
         // 并行查询总数和分页数据
         const [totalResult, submissionsResult] = await Promise.all([

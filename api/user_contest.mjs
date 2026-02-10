@@ -16,7 +16,7 @@ async function user_contest(ctx) {
         return;
     }
 
-    logger.info(`user_contest: 正在获取用户 ${username} 的比赛历史`);
+    logger.debug(`user_contest: 正在获取用户 ${username} 的比赛历史`);
     try {
         const [historyRows] = await pool.query('SELECT DISTINCT contest_id FROM contest_participants WHERE username = ?', [username]);
         if (historyRows.length === 0) {

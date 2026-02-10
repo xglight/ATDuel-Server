@@ -15,7 +15,7 @@ async function user_contestid(ctx) {
         return;
     }
 
-    logger.info(`user_contestid: 正在获取用户 ${username} 参与的比赛 ID`);
+    logger.debug(`user_contestid: 正在获取用户 ${username} 参与的比赛 ID`);
     try {
         const [rows] = await pool.query('SELECT contest_id FROM contest_participants WHERE username = ?', [username]);
 

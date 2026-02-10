@@ -63,7 +63,7 @@ async function rooms(ctx) {
             };
         });
 
-        logger.info(`rooms: 成功获取 ${result.length} 个房间`);
+        logger.debug(`rooms: 成功获取 ${result.length} 个房间`);
 
         ctx.status = 200;
         ctx.body = {

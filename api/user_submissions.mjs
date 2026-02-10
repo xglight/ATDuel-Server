@@ -2,6 +2,33 @@
 import logger from '../logger.mjs';
 import * as cheerio from 'cheerio';
 
+// 全局请求队列，用于限制对 AtCoder 的请求频率
+let requestQueue = Promise.resolve();
+const MIN_INTERVAL = 2000; // 最小请求间隔 2 秒
+
+/**
+ * 带有频率限制的 fetch 请求
+ * 
+ * @param {string} url - 请求 URL
+ * @param {object} options - Fetch 选项
+ * @returns {Promise<Response>}
+ */
+async function rateLimitedFetch(url, options) {
+    return new Promise((resolve, reject) => {
+        requestQueue = requestQueue.then(async () => {
+            try {
+                // 在每个请求之前增加随机延时，模拟人类行为
+                const randomDelay = Math.floor(Math.random() * 1000);
+                await new Promise(r => setTimeout(r, MIN_INTERVAL + randomDelay));
+                const response = await fetch(url, options);
+                resolve(response);
+            } catch (error) {
+                reject(error);
+            }
+        });
+    });
+}
+
 /**
  * 格式化日期字符串，包含时区偏移
  * 
@@ -98,7 +125,7 @@ async function getUserSubmissions2(ctx) {
     const url = `https://atcoder.jp/contests/${contest}/submissions?f.Task=${problem_id}&f.LanguageName=&f.Status=${status}&f.User=${username}`;
 
     try {
-        const response = await fetch(url, {
+        const response = await rateLimitedFetch(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0',
                 'Cookie': 'timeDelta=-810;REVEL_FLASH=;REVEL_SESSION=e1e92e896fb0471587bda765ac1659e079dee962-%00SessionKey%3Ae87f648ac2faf409f971852b2d9330af0fe3d5a69980fd93b4cd4f28a4febd46%00%00UserScreenName%3Axiaofu16191%00%00UserName%3Axiaofu16191%00%00a%3Afalse%00%00w%3Afalse%00%00csrf_token%3A%2FUmojZetD5dLhl5nGYCTsL4kXYKf3HFlFhih%2FthTeE8%3D%00%00_TS%3A1785844093%00;_ga=GA1.1.495292803.1760918025;_ga_RC512FD18N=GS2.1.s1770289300$o50$g1$t1770292091$j38$l0$h0;language=en;OJB_Session_ojb_updateL10nWebsiteJson_zh=true',
@@ -107,7 +134,11 @@ async function getUserSubmissions2(ctx) {
         });
 
         if (!response.ok) {
-            throw new Error(`网页请求返回状态码 ${response.status}`);
+            let errorMsg = `网页请求返回状态码 ${response.status}`;
+            if (response.status === 429) {
+                errorMsg += "，增加限速";
+            }
+            throw new Error(errorMsg);
         }
 
         const data = await response.text();

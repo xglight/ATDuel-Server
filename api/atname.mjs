@@ -29,7 +29,7 @@ async function atname(ctx) {
         }
 
         const { ATName } = users[0];
-        logger.info(`atname: 找到用户 ${username} 对应的 AtCoder 用户名: ${ATName}`);
+        logger.debug(`atname: 找到用户 ${username} 对应的 AtCoder 用户名: ${ATName}`);
 
         ctx.status = 200;
         ctx.body = { success: true, data: ATName };
