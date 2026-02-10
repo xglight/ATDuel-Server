@@ -2,36 +2,47 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
-async function logout(ctx, next) {
+/**
+ * 用户登出接口
+ * 清除用户的登录状态记录
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function logout(ctx) {
     const { username, token } = ctx.request.body;
 
     if (!username || !token) {
         ctx.status = 400;
         ctx.body = {
-            message: 'Username or token cannot be empty'
+            success: false,
+            message: '用户名和 Token 不能为空'
         };
         return;
     }
 
-    logger.debug(`logout: User ${username} logged out`);
+    logger.debug(`logout: 用户 ${username} 正在尝试登出`);
 
     try {
-        const [rows] = await pool.execute('DELETE FROM login_status WHERE username=? AND token=?', [username, token]);
-        if (rows.affectedRows === 0) {
-            ctx.status = 401;
-            ctx.body = {
-                message: 'User or login information does not exist'
-            };
-            return;
-        }
+        const [result] = await pool.execute(
+            'DELETE FROM login_status WHERE username = ? AND token = ?',
+            [username, token]
+        );
+
+        // 即使没有找到匹配的 session，也认为登出成功（幂等性）
+        logger.info(`logout: 用户 ${username} 已登出 (影响行数: ${result.affectedRows})`);
+
         ctx.status = 200;
-        ctx.type = 'text/plain';
-        ctx.body = 'Logout successful';
+        ctx.body = {
+            success: true,
+            message: '登出成功'
+        };
     } catch (err) {
-        logger.error(`logout: Logout failed: ${err.message}`);
+        logger.error(`logout 错误: ${err.message}`);
         ctx.status = 500;
-        ctx.type = 'text/plain';
-        ctx.body = 'Server Error';
+        ctx.body = {
+            success: false,
+            message: '服务器内部错误'
+        };
     }
 }
 

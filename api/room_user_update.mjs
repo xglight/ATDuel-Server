@@ -2,173 +2,176 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
-async function room_user_update(ctx, next) {
-    const { roomId, op, team, username } = ctx.request.body;
-    let pos = ctx.request.body.pos || 0;
+/**
+ * 更新房间成员接口 (加入/退出)
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function updateRoomUser(ctx) {
+    const { roomId: roomUrl, op: operation, team: targetTeam, username, token } = ctx.request.body;
+    const position = ctx.request.body.pos || 0;
 
     // 参数验证
-    if (!roomId || op == null || team == null || !username) {
+    if (!roomUrl || operation === undefined || targetTeam === undefined || !username || !token) {
         ctx.status = 400;
-        ctx.body = { success: false, error: 'Incomplete parameters' };
+        ctx.body = { success: false, message: '缺少必要参数' };
         return;
     }
 
-    logger.debug(`room_user_update: Updating room user, Room ID ${roomId}, operation ${op}, team ${team}, username ${username}, position ${pos}`);
+    logger.debug(`room_user_update: 正在更新成员信息, 用户: ${username}, 房间: ${roomUrl}, 操作: ${operation}, 队伍: ${targetTeam}, 位置: ${position}`);
 
-    const conn = await pool.getConnection();
+    let conn;
     try {
+        conn = await pool.getConnection();
         await conn.beginTransaction();
 
-        // 获取房间信息和锁
-        const [rows] = await conn.query(
-            `SELECT * FROM room WHERE url = ? FOR UPDATE`,
-            [roomId]
+        // 校验 Token
+        const [loginRows] = await conn.execute(
+            'SELECT username FROM login_status WHERE username = ? AND token = ?',
+            [username, token]
         );
 
-        if (rows.length === 0) {
-            ctx.status = 404;
-            ctx.body = { success: false, error: 'Room not found' };
+        if (loginRows.length === 0) {
+            ctx.status = 401;
+            ctx.body = { success: false, message: '未登录或 Token 无效' };
             await conn.rollback();
             return;
         }
 
-        const room = rows[0];
+        // 获取房间信息和锁
+        const [rows] = await conn.execute('SELECT id, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count FROM room WHERE url = ? FOR UPDATE', [roomUrl]);
+        if (rows.length === 0) {
+            ctx.status = 404;
+            ctx.body = { success: false, message: '未找到该房间' };
+            await conn.rollback();
+            return;
+        }
+
+        const roomData = rows[0];
+
         // 获取房间成员
-        const [participants] = await conn.query(
-            `SELECT * FROM room_participants WHERE room_id = ?`,
-            [room.id]
+        const [participants] = await conn.execute(
+            'SELECT username, team_label, avatar, place, ready FROM room_participants WHERE room_id = ?',
+            [roomData.id]
         );
 
-        const teamData = { A: [], B: [] };
-        const userData = {};
+        const currentTeams = { A: [], B: [] };
+        const userMap = {};
         participants.forEach(p => {
-            teamData[p.team_label].push(p.username);
-            userData[p.username] = {
+            if (currentTeams[p.team_label]) {
+                currentTeams[p.team_label].push(p.username);
+            }
+            userMap[p.username] = {
                 avatar: p.avatar,
                 place: p.place,
                 ready: !!p.ready
             };
         });
 
-        const setting = {
-            mode: room.setting_mode || '1V1',
-            rating_lowest: room.setting_rating_lowest,
-            rating_highest: room.setting_rating_highest,
-            problem_count: room.setting_problem_count
-        };
-
-        const mode = setting.mode.split('V');
+        const mode = (roomData.setting_mode || '1V1').toUpperCase().split('V');
         const maxTeamA = parseInt(mode[0]) || 1;
         const maxTeamB = parseInt(mode[1]) || 1;
 
         // 操作处理
-        if (op === 0) { // 退出
-            await conn.query(
-                `DELETE FROM room_participants WHERE room_id = ? AND username = ?`,
-                [room.id, username]
+        if (operation === 0) { // 退出
+            await conn.execute(
+                'DELETE FROM room_participants WHERE room_id = ? AND username = ?',
+                [roomData.id, username]
             );
-            // 更新本地副本用于后续逻辑
-            delete userData[username];
-            const t = teamData.A.includes(username) ? 'A' : 'B';
-            teamData[t] = teamData[t].filter(n => n !== username);
-        } else if (op === 1) { // 加入
-            // 验证位置有效性
-            const teamKey = team === 1 ? 'A' : 'B';
-            const maxPos = team === 1 ? maxTeamA : maxTeamB;
 
-            if (pos <= 0 || pos > maxPos) {
-                ctx.status = 400;
-                ctx.body = { success: false, error: 'Invalid position' };
+            // 更新本地副本
+            delete userMap[username];
+            const currentTeamLabel = currentTeams.A.includes(username) ? 'A' : 'B';
+            currentTeams[currentTeamLabel] = currentTeams[currentTeamLabel].filter(n => n !== username);
+
+        } else if (operation === 1) { // 加入
+            const teamKey = targetTeam === 1 ? 'A' : 'B';
+            const maxPos = targetTeam === 1 ? maxTeamA : maxTeamB;
+
+            // 验证位置有效性
+            if (position <= 0 || position > maxPos) {
+                ctx.body = { success: false, message: '无效的位置' };
                 await conn.rollback();
                 return;
             }
 
             // 检查是否已在房间中
-            const isInRoom = participants.some(p => p.username === username);
-            if (isInRoom) {
-                ctx.status = 400;
-                ctx.body = { success: false, error: 'Please exit the current team first' };
+            if (participants.some(p => p.username === username)) {
+                ctx.body = { success: false, message: '请先退出当前队伍' };
                 await conn.rollback();
                 return;
             }
 
-            // 检查该位置是否已被占用
-            const isPosOccupied = participants.some(p => p.team_label === teamKey && p.place === pos);
-            if (isPosOccupied) {
-                ctx.status = 400;
-                ctx.body = { success: false, error: 'Position already occupied' };
+            // 检查位置是否被占用
+            if (participants.some(p => p.team_label === teamKey && p.place === position)) {
+                ctx.body = { success: false, message: '该位置已被占用' };
                 await conn.rollback();
                 return;
             }
 
-            const [userRows] = await conn.query(`SELECT avatar FROM user WHERE username = ?`, [username]);
-            const avatar = userRows[0]?.avatar || '';
+            // 获取用户头像
+            const [userRows] = await conn.execute('SELECT avatar FROM user WHERE username = ? LIMIT 1', [username]);
+            const avatar = userRows.length > 0 ? userRows[0].avatar : '';
 
-            await conn.query(
-                `INSERT INTO room_participants (room_id, username, team_label, place, avatar, ready) VALUES (?, ?, ?, ?, ?, ?)`,
-                [room.id, username, teamKey, pos, avatar, false]
+            // 插入新成员
+            await conn.execute(
+                'INSERT INTO room_participants (room_id, username, team_label, avatar, place, ready) VALUES (?, ?, ?, ?, ?, 0)',
+                [roomData.id, username, teamKey, avatar, position]
             );
 
-            // 更新本地副本用于返回
-            teamData[teamKey].push(username);
-            userData[username] = { avatar, place: pos, ready: false };
+            // 更新本地副本
+            currentTeams[teamKey].push(username);
+            userMap[username] = {
+                avatar,
+                place: position,
+                ready: false
+            };
         }
 
-        // 更新房间更新时间
-        await conn.query(
-            `UPDATE room SET last_updated = NOW() WHERE id = ?`,
-            [room.id]
+        // 更新房间最后更新时间
+        const now = new Date();
+        await conn.execute(
+            'UPDATE room SET last_updated = ? WHERE id = ?',
+            [now, roomData.id]
         );
 
-        // 获取更新后的房间信息
-        const [updatedRoom] = await conn.query(
-            `SELECT * FROM room WHERE id = ?`,
-            [room.id]
-        );
-
-        // 提交事务
         await conn.commit();
 
-        // 广播通知
-        if (updatedRoom.length > 0) {
-            const broadcastMsg = {
-                type: 'room_update',
-                roomId: roomId,
-                last_updated: updatedRoom[0].last_updated,
-                fullUpdate: true // 标记需要完全刷新
-            };
-            ctx.app.emit('broadcast', broadcastMsg);
-        }
+        const result = {
+            team: currentTeams,
+            user: userMap,
+            setting: {
+                mode: roomData.setting_mode,
+                rating_lowest: roomData.setting_rating_lowest,
+                rating_highest: roomData.setting_rating_highest,
+                problem_count: roomData.setting_problem_count
+            },
+            last_updated: now
+        };
 
-        ctx.status = 200;
+        // 广播更新
+        ctx.app.emit('broadcast', {
+            type: 'room_update',
+            roomId: roomUrl,
+            last_updated: now,
+            data: result
+        });
+
         ctx.body = {
             success: true,
-            last_updated: updatedRoom[0].last_updated,
-            userData: userData
+            data: result,
+            message: '房间信息已更新'
         };
+
     } catch (err) {
-        logger.error(`room_user_update: Failed to update room user: ${err.message}`);
-        if (conn) {
-            try {
-                await conn.rollback();
-            } catch (rollbackErr) {
-                logger.error(`room_user_update: Transaction rollback failed: ${rollbackErr.message}`);
-            }
-            conn.release();
-        }
+        logger.error(`room_user_update 错误: ${err.message}`);
+        if (conn) await conn.rollback();
         ctx.status = 500;
-        ctx.body = {
-            success: false,
-            error: 'Internal Server Error',
-            detail: process.env.NODE_ENV === 'development' ? err.message : undefined
-        };
+        ctx.body = { success: false, message: '服务器内部错误' };
     } finally {
-        if (conn && conn.connection) {
-            conn.release();
-        }
+        if (conn) conn.release();
     }
 }
 
 export default {
-    'POST /room_user_update': room_user_update
+    'POST /room_user_update': updateRoomUser
 };

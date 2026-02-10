@@ -1,15 +1,20 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
+/**
+ * 更新用户在 AtCoder 上的 AC 记录
+ * 
+ * @param {string} username - 用户名
+ * @returns {Promise<{success?: boolean, error?: string}>} 更新结果
+ */
 export async function updateUserAC(username) {
     const [rows] = await pool.query(
         'SELECT acLastUpdate FROM user WHERE username = ?', [username]);
 
     if (rows.length === 0) {
-        return { error: 'user not found' };
+        return { error: '未找到该用户' };
     }
 
-    const now = Math.floor(new Date().getTime() / 1000);
     const baseUrl = 'https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user=' + username + '&from_second=';
 
     let lastUpdate = rows[0].acLastUpdate || 0;
@@ -22,7 +27,7 @@ export async function updateUserAC(username) {
         try {
             const response = await fetch(url);
             if (!response.ok) {
-                logger.error(`updateUserAC: API returned status ${response.status} for user ${username}`);
+                logger.error(`updateUserAC: 用户 ${username} 的 API 请求返回状态码 ${response.status}`);
                 break;
             }
             const data = await response.json();
@@ -40,13 +45,13 @@ export async function updateUserAC(username) {
                 }
 
                 if (item.result === 'AC') {
-                    const name = item.problem_id;
+                    const problemId = item.problem_id;
                     try {
                         await pool.execute(
                             'INSERT IGNORE INTO user_problem_accept (username, problem_id) VALUES (?,?)'
-                            , [username, name]);
+                            , [username, problemId]);
                     } catch (error) {
-                        logger.error('Failed to insert data:', error);
+                        logger.error(`updateUserAC: 插入 AC 记录失败 (用户: ${username}, 题目: ${problemId}):`, error);
                     }
                 }
             }
@@ -60,8 +65,8 @@ export async function updateUserAC(username) {
 
             url = baseUrl + lastUpdate;
         } catch (err) {
-            logger.error(`updateUserAC: Failed to fetch submissions for user ${username}: ${err.message}`);
-            return { error: 'fetch failed' };
+            logger.error(`updateUserAC: 获取用户 ${username} 的提交记录失败: ${err.message}`);
+            return { error: '获取数据失败' };
         }
     }
 
@@ -71,26 +76,29 @@ export async function updateUserAC(username) {
     return { success: true };
 }
 
-async function user_ac_update(ctx, next) {
-    const username = ctx.request.body.username;
+/**
+ * 更新用户 AC 记录接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function user_ac_update(ctx) {
+    const { username } = ctx.request.body;
 
     if (!username) {
-        ctx.response.status = 400;
-        ctx.response.body = { error: 'username is required' };
+        ctx.status = 400;
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
 
     const result = await updateUserAC(username);
     if (result.error) {
-        ctx.response.status = result.error === 'user not found' ? 404 : 500;
-        ctx.response.body = { error: result.error };
+        ctx.status = result.error === '未找到该用户' ? 404 : 500;
+        ctx.body = { success: false, message: result.error };
         return;
     }
 
     ctx.status = 200;
-    ctx.type = 'application/json';
-    ctx.body = [];
-    return;
+    ctx.body = { success: true, message: 'AC 记录更新成功' };
 }
 
 export default { 'POST /user_ac_update': user_ac_update };

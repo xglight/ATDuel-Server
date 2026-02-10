@@ -3,7 +3,13 @@ import readline from 'readline';
 import pool from '../db.mjs';
 import axios from 'axios';
 import logger from '../logger.mjs';
+import fs from 'fs/promises';
 
+/**
+ * 获取题目列表并更新数据库
+ * @param {string} url - clist.by API 的 URL
+ * @returns {Promise<string|number|null>} 返回下一页的 URL，或者 null 表示结束，-1 表示失败
+ */
 async function getProblem(url) {
     logger.info("Fetching data:", url);
     try {
@@ -20,10 +26,13 @@ async function getProblem(url) {
             const problem = problems[i];
             const id = problem.id;
             const [rows] = await pool.execute('SELECT id FROM problem WHERE id = ?', [id]);
-            const difficulty = problem.rating == null ? -1 : problem.rating;
             const problemurl = problem.url;
             const name = problemurl.split('/').pop();
             const title = problemurl.split('/').pop() + ' - ' + problem.name;
+            const difficulty = problemDifficulty[name]?.difficulty ?? -10000;
+            if (difficulty == -10000) {
+                logger.warn(`Difficulty not found for problem ${id}, name ${name}, url ${problemurl}`);
+            }
             const contest = problemurl.replace('https://atcoder.jp/contests/', '').split('/')[0];
             if (rows.length > 0) {
                 logger.info("Data already exists, updating difficulty and contest:", id, title, difficulty, contest);
@@ -50,8 +59,13 @@ async function getProblem(url) {
     }
 }
 
-const problemDifficulty = {};
+let problemDifficulty = {};
 
+/**
+ * 初始化题目难度数据
+ * 从 Kenkoooo API 获取 AtCoder 题目模型数据，并缓存到本地文件
+ * @returns {Promise<number|void>} 成功返回 void，失败返回 -1
+ */
 async function initProblemDifficulty() {
     const url = "https://kenkoooo.com/atcoder/resources/problem-models.json";
     try {
@@ -63,11 +77,25 @@ async function initProblemDifficulty() {
             data: error.response?.data,
             message: error.message
         });
-        return -1;
+        // 如果 API 失败，尝试从本地缓存读取
+        try {
+            const data = await fs.readFile('problem-models.json', 'utf-8');
+            problemDifficulty = JSON.parse(data);
+            logger.info("Loaded problem difficulty from local cache.");
+        } catch (fsError) {
+            logger.error('Failed to load difficulty from cache:', fsError.message);
+            return -1;
+        }
     }
 }
 
+/**
+ * 主函数，同步题目数据
+ * @param {string} username - clist.by 用户名
+ * @param {string} api_key - clist.by API 密钥
+ */
 async function main(username, api_key) {
+    await initProblemDifficulty();
     let url = "https://clist.by/api/v4/problem/?resource=atcoder.jp&format=json&username=" + username + "&api_key=" + api_key;
     let start_time = Date.now(), cnt = 0, total = 0;
     while (true) {

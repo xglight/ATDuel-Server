@@ -3,21 +3,25 @@ import pool from '../db.mjs';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
 
-async function user_contest(ctx, next) {
-    const username = ctx.params.username;
+/**
+ * 获取用户的比赛历史接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function user_contest(ctx) {
+    const { username } = ctx.params;
     if (!username) {
         ctx.status = 400;
-        ctx.body = { error: 'username is required' };
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
 
-    logger.info(`user_contest: Fetching contest history for user ${username}`);
+    logger.info(`user_contest: 正在获取用户 ${username} 的比赛历史`);
     try {
         const [historyRows] = await pool.query('SELECT DISTINCT contest_id FROM contest_participants WHERE username = ?', [username]);
         if (historyRows.length === 0) {
             ctx.status = 200;
-            ctx.type = 'application/json';
-            ctx.body = [];
+            ctx.body = { success: true, data: [] };
             return;
         }
 
@@ -75,13 +79,11 @@ async function user_contest(ctx, next) {
         }
 
         ctx.status = 200;
-        ctx.type = 'application/json';
-        ctx.body = data;
+        ctx.body = { success: true, data: data };
     } catch (err) {
-        logger.error(`user_contest: Failed to fetch contest history for user ${username}: ${err.message}`);
+        logger.error(`user_contest: 获取用户 ${username} 的比赛历史失败: ${err.message}`);
         ctx.status = 500;
-        ctx.body = { error: 'Internal Server Error' };
-        return;
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

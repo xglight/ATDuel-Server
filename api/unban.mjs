@@ -1,36 +1,35 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
-import config from '../config.mjs';
-async function unbanUser(ctx, next) {
+import { verifyAdmin } from '../utils/auth.mjs';
+
+/**
+ * 解除封禁接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function unbanUser(ctx) {
     const { username, token } = ctx.request.body;
     if (!username || !token) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'username or token cannot be empty' };
+        ctx.body = { success: false, message: '用户名和 Token 均不能为空' };
         return;
     }
 
-    const res = await fetch(config.buildApiUrl('/admin/check'), {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token: token }),
-    }).then(res => res.json());
-    if (res.success == false) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: 'Token is invalid.' };
+    if (!(await verifyAdmin(token))) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '管理员权限校验失败' };
         return;
     }
-    logger.info(`unbanUser: Unbanning user ${username}`);
 
     try {
+        logger.info(`unbanUser: 正在解除用户封禁: ${username}`);
         await pool.execute('DELETE FROM user_ban WHERE username = ?', [username]);
         ctx.status = 200;
-        ctx.body = { success: true, message: 'User unbanned successfully' };
+        ctx.body = { success: true, message: '用户已成功解除封禁' };
     } catch (err) {
-        logger.error(`unbanUser: Database error: ${err.message}`);
+        logger.error(`unbanUser 错误: ${err.message}`);
         ctx.status = 500;
-        ctx.body = { success: false, message: 'Server Error' };
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

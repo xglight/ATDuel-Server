@@ -3,17 +3,21 @@ import logger from '../logger.mjs';
 
 /**
  * 获取公开配置信息的接口
- * @param {object} ctx Koa 上下文
+ *
+ * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function getConfig(ctx) {
-    logger.debug(`api/config: Fetching public configuration`);
+    logger.debug('api/config: 正在获取公开配置信息');
 
     ctx.status = 200;
     ctx.body = {
-        register: config.register,
-        content: config.content,
-        server: {
-            apiPrefix: config.server.apiPrefix
+        success: true,
+        data: {
+            register: config.register,
+            content: config.content,
+            server: {
+                apiPrefix: config.server.apiPrefix
+            }
         }
     };
 }

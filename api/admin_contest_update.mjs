@@ -1,30 +1,23 @@
 // admin_contest_update.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
-import config from '../config.mjs';
+import { verifyAdmin } from '../utils/auth.mjs';
 
 /**
- * 更新比赛信息 (管理员权限)
- * @param {object} ctx - Koa context
+ * 更新比赛信息接口 (管理员权限)
+ * @param {import('koa').Context} ctx - Koa 上下文
  */
-async function updateContest(ctx, next) {
+async function updateContest(ctx) {
     const { contestId, token, startTime, endTime, rated, status } = ctx.request.body;
 
     if (!contestId || !token) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'contestId and token are required' };
+        ctx.body = { success: false, message: 'contestId 和 Token 均不能为空' };
         return;
     }
 
     try {
-        // 校验管理员 Token
-        const checkRes = await fetch(config.buildApiUrl('/admin/check'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
-        }).then(res => res.json());
-
-        if (!checkRes.success) {
+        if (!(await verifyAdmin(token))) {
             ctx.status = 401;
             ctx.body = { success: false, message: '管理员权限校验失败' };
             return;
@@ -53,7 +46,7 @@ async function updateContest(ctx, next) {
 
         if (updates.length === 0) {
             ctx.status = 400;
-            ctx.body = { success: false, message: 'No fields to update' };
+            ctx.body = { success: false, message: '没有需要更新的字段' };
             return;
         }
 
@@ -68,14 +61,14 @@ async function updateContest(ctx, next) {
             return;
         }
 
-        logger.info(`admin_contest_update: Contest ${contestId} updated by admin`);
+        logger.info(`admin_contest_update: 管理员更新了比赛 ${contestId}`);
         ctx.status = 200;
         ctx.body = { success: true, message: '比赛信息已更新' };
 
     } catch (err) {
-        logger.error(`admin_contest_update: Failed to update contest ${contestId}: ${err.message}`);
+        logger.error(`admin_contest_update: 更新比赛 ${contestId} 失败: ${err.message}`);
         ctx.status = 500;
-        ctx.body = { success: false, message: '数据库操作失败' };
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

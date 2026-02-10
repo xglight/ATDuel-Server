@@ -2,35 +2,35 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
-async function rating(ctx, next) {
-    const username = ctx.params.username;
+/**
+ * 获取用户的 Rating 接口
+ *
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function rating(ctx) {
+    const { username } = ctx.params;
     if (!username) {
         ctx.status = 400;
-        ctx.body = { error: 'username is required' };
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
 
-    logger.debug(`rating: Querying rating for user ${username}`);
+    logger.debug(`rating: 正在查询用户 ${username} 的 Rating`);
     try {
-        const [rows, fields] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
+        const [rows] = await pool.execute('SELECT rating FROM user WHERE username = ? LIMIT 1', [username]);
 
         if (rows.length === 0) {
             ctx.status = 404;
-            ctx.body = { error: 'User not found' };
+            ctx.body = { success: false, message: '未找到该用户' };
             return;
         }
 
-        const rating = rows[0].rating;
-
         ctx.status = 200;
-        ctx.type = "text/plain"
-        ctx.body = rating;
+        ctx.body = { success: true, data: rows[0].rating };
     } catch (err) {
-        logger.error(`rating: Failed to query rating for user ${username}: ${err.message}`);
+        logger.error(`rating: 查询用户 ${username} 的 Rating 失败: ${err.message}`);
         ctx.status = 500;
-        ctx.type = "text/plain"
-        ctx.body = 'Server Error';
-        return;
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

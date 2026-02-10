@@ -2,71 +2,90 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
-async function contest_ac(ctx, next) {
+/**
+ * 更新比赛 AC 状态 API 处理函数
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function contest_ac(ctx) {
     try {
         // 参数校验
         const { contestId, username, title } = ctx.request.body;
         if (!contestId || !username || !title) {
             ctx.status = 400;
-            ctx.body = { error: 'contestId, username, title are required' };
+            ctx.body = { success: false, message: 'contestId, username, title 均不能为空' };
             return;
         }
 
         // 查询比赛
         const [rows] = await pool.execute(
-            'SELECT * FROM contest WHERE url = ?', [contestId]
+            'SELECT id, scorea, scoreb FROM contest WHERE url = ? LIMIT 1', [contestId]
         );
 
         if (rows.length === 0) {
             ctx.status = 404;
-            ctx.body = { error: 'Not Found' };
+            ctx.body = { success: false, message: '未找到该比赛' };
             return;
         }
 
-        logger.debug(`contest_ac: Updating AC status: Contest ID ${contestId}, user ${username}, problem ${title}`);
+        logger.debug(`contest_ac: 正在更新 AC 状态: 比赛 ID ${contestId}, 用户 ${username}, 题目 ${title}`);
 
         const contest = rows[0];
-        const [problems] = await pool.query('SELECT * FROM contest_problems WHERE contest_id = ?', [contest.id]);
-        const [teams] = await pool.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contest.id]);
+        // 并行查询题目和队伍信息
+        const [[problems], [teams]] = await Promise.all([
+            pool.execute('SELECT * FROM contest_problems WHERE contest_id = ?', [contest.id]),
+            pool.execute('SELECT team_label, username FROM contest_teams WHERE contest_id = ?', [contest.id])
+        ]);
 
         let scorea = contest.scorea;
         let scoreb = contest.scoreb;
         let updated = false;
 
-        for (let i = 0; i < problems.length; i++) {
-            if (problems[i].title.includes(title) && problems[i].status == 0) {
-                // 检查用户属于哪个队伍并更新分数
-                const userTeam = teams.find(t => t.username === username);
-                if (userTeam) {
-                    if (userTeam.team_label === 'A') {
-                        scorea += problems[i].score;
-                    } else {
-                        scoreb += problems[i].score;
-                    }
+        // 寻找符合条件的题目
+        const problemToUpdate = problems.find(p => p.title.includes(title) && p.status == 0);
+        const userTeam = teams.find(t => t.username === username);
 
-                    // 更新参与者分数
-                    await pool.query(
-                        'UPDATE contest_participants SET score = score + ? WHERE contest_id = ? AND username = ?',
-                        [problems[i].score, contest.id, username]
-                    );
+        if (problemToUpdate && userTeam) {
+            if (userTeam.team_label === 'A') {
+                scorea += problemToUpdate.score;
+            } else {
+                scoreb += problemToUpdate.score;
+            }
 
-                    // 更新题目状态
-                    await pool.query(
-                        'UPDATE contest_problems SET status = 1, acuser = ? WHERE contest_id = ? AND problem_id = ?',
-                        [username, contest.id, problems[i].problem_id]
-                    );
+            let conn;
+            try {
+                conn = await pool.getConnection();
+                await conn.beginTransaction();
 
-                    updated = true;
-                    break;
-                }
+                // 1. 更新参与者分数
+                await conn.execute(
+                    'UPDATE contest_participants SET score = score + ? WHERE contest_id = ? AND username = ?',
+                    [problemToUpdate.score, contest.id, username]
+                );
+
+                // 2. 更新题目状态
+                await conn.execute(
+                    'UPDATE contest_problems SET status = 1, acuser = ? WHERE contest_id = ? AND problem_id = ?',
+                    [username, contest.id, problemToUpdate.problem_id]
+                );
+
+                // 3. 更新比赛总分
+                await conn.execute(
+                    'UPDATE contest SET scorea = ?, scoreb = ? WHERE id = ?',
+                    [scorea, scoreb, contest.id]
+                );
+
+                await conn.commit();
+                updated = true;
+            } catch (err) {
+                if (conn) await conn.rollback();
+                throw err;
+            } finally {
+                if (conn) conn.release();
             }
         }
 
         if (updated) {
-            await pool.execute(
-                'UPDATE contest SET scorea = ?, scoreb = ? WHERE url = ?',
-                [scorea, scoreb, contestId]
-            );
             // 广播分数更新
             ctx.app.emit('broadcast', {
                 type: 'contest_update',
@@ -74,12 +93,15 @@ async function contest_ac(ctx, next) {
             });
 
             ctx.status = 200;
-            ctx.body = { success: true, message: 'AC status updated successfully' };
+            ctx.body = { success: true, message: 'AC 状态更新成功' };
+        } else {
+            ctx.status = 400;
+            ctx.body = { success: false, message: '无需更新或未找到匹配记录' };
         }
     } catch (err) {
-        logger.error(`contest_ac: Failed to update AC status: ${err.message}`);
+        logger.error(`contest_ac 错误: ${err.message}`);
         ctx.status = 500;
-        ctx.body = { error: 'Internal server error' };
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

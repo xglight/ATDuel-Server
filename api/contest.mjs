@@ -3,22 +3,33 @@ import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
 
-async function contest(ctx, next) {
-    const id = ctx.params.id;
+/**
+ * 获取单个比赛详情接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function contest(ctx) {
+    const { id: contestUrl } = ctx.params;
+
+    if (!contestUrl) {
+        ctx.status = 400;
+        ctx.body = { success: false, message: '比赛 URL 不能为空' };
+        return;
+    }
+
+    logger.debug(`contest: 正在获取比赛详情: ${contestUrl}`);
+
     try {
-        const [rows, fields] = await pool.query(`SELECT * FROM contest WHERE url = ?`, [id]);
+        const [rows] = await pool.execute('SELECT * FROM contest WHERE url = ? LIMIT 1', [contestUrl]);
 
         if (rows.length === 0) {
             ctx.status = 404;
-            ctx.type = 'text/plain';
-            ctx.body = 'Contest does not exist';
+            ctx.body = { success: false, message: '未找到该比赛' };
             return;
         }
 
-        logger.debug(`contest: Fetching contest: Contest ID ${id}`);
-
-        const contest = rows[0];
-        const contestId = contest.id;
+        const contestData = rows[0];
+        const contestId = contestData.id;
 
         // 并行查询所有关联表
         const [
@@ -28,16 +39,20 @@ async function contest(ctx, next) {
             [submissions],
             [ratings]
         ] = await Promise.all([
-            pool.query('SELECT * FROM contest_teams WHERE contest_id = ?', [contestId]),
-            pool.query('SELECT * FROM contest_participants WHERE contest_id = ?', [contestId]),
-            pool.query('SELECT * FROM contest_problems WHERE contest_id = ?', [contestId]),
-            pool.query('SELECT * FROM contest_submissions WHERE contest_id = ?', [contestId]),
-            pool.query('SELECT * FROM contest_ratings WHERE contest_id = ?', [contestId])
+            pool.execute('SELECT * FROM contest_teams WHERE contest_id = ?', [contestId]),
+            pool.execute('SELECT * FROM contest_participants WHERE contest_id = ?', [contestId]),
+            pool.execute('SELECT * FROM contest_problems WHERE contest_id = ?', [contestId]),
+            pool.execute('SELECT * FROM contest_submissions WHERE contest_id = ?', [contestId]),
+            pool.execute('SELECT * FROM contest_ratings WHERE contest_id = ?', [contestId])
         ]);
 
         // 格式化为前端需要的 JSON 结构
         const team = { A: [], B: [] };
-        teams.forEach(t => team[t.team_label].push(t.username));
+        teams.forEach(t => {
+            if (team[t.team_label]) {
+                team[t.team_label].push(t.username);
+            }
+        });
 
         const user = {};
         participants.forEach(p => {
@@ -65,9 +80,9 @@ async function contest(ctx, next) {
             time: s.submission_time
         }));
 
-        const Rating = {};
+        const rating = {};
         ratings.forEach(r => {
-            Rating[r.username] = {
+            rating[r.username] = {
                 oldRating: r.old_rating,
                 newRating: r.new_rating,
                 delta: r.delta
@@ -75,23 +90,23 @@ async function contest(ctx, next) {
         });
 
         const result = {
-            ...contest,
+            ...contestData,
             team,
             user,
             problem,
             submission,
-            Rating
+            rating
         };
 
-        ctx.type = 'text/json';
         ctx.status = 200;
-        ctx.body = JSON.stringify(result);
+        ctx.body = {
+            success: true,
+            data: result
+        };
     } catch (err) {
-        logger.error(`contest: Failed to fetch contest: ${err.message}`);
+        logger.error(`contest 错误: 无法获取比赛 ${contestUrl}: ${err.message}`);
         ctx.status = 500;
-        ctx.type = 'text/plain';
-        ctx.body = 'Server Error';
-        return;
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

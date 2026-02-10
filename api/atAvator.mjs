@@ -1,55 +1,59 @@
-// atavatar.mjs
+// atAvator.mjs
 import * as cheerio from 'cheerio';
-import https from 'https';
+import axios from 'axios';
 import logger from '../logger.mjs';
 
-async function atavatar(ctx, next) {
-    const username = ctx.params.username;
-    if (!username) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: 'Username is required' };
-        return;
-    }
-    const url = 'https://atcoder.jp/users/' + username;
-
-    logger.debug('atavatar: Requesting avatar: ', url);
-
-    ctx.type = 'text/plain';
-
+/**
+ * 核心逻辑：获取 AtCoder 用户头像路径
+ * 
+ * @param {string} username - AtCoder 用户名
+ * @returns {Promise<string|null>} 头像路径或 null
+ */
+async function getAtAvatarPath(username) {
+    if (!username) return null;
+    const url = `https://atcoder.jp/users/${username}`;
     try {
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    resolve(data);
-                });
-            }).on('error', (error) => {
-                logger.error('atavatar: Network error: ', error);
-                reject(error);
-            });
+        const response = await axios.get(url, {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
         });
 
-        const $ = cheerio.load(data);
-
-        let img = $('#main-div #main-container div .avatar').attr('src');
-
-        if (img === '' || img === undefined) {
-            img.status = 404;
-            ctx.body = 'Not Found';
-        } else {
-            ctx.status = 200;
-            ctx.body = img;
-        }
+        const $ = cheerio.load(response.data);
+        return $('#main-div #main-container div .avatar').attr('src') || null;
     } catch (error) {
-        logger.error('atavatar: Processing error: ', error);
-        ctx.status = 500;
-        ctx.body = 'Server Error';
+        logger.error(`getAtAvatarPath 错误: 获取用户 ${username} 的头像失败: ${error.message}`);
+        return null;
     }
 }
 
-export default {
-    'GET /atavatar/:username': atavatar
+/**
+ * 获取 AtCoder 用户头像接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function atAvatar(ctx) {
+    const { username } = ctx.params;
+    if (!username) {
+        ctx.status = 400;
+        ctx.body = { success: false, message: '用户名不能为空' };
+        return;
+    }
+
+    logger.debug(`atAvatar: 正在请求用户 ${username} 的头像`);
+    const img = await getAtAvatarPath(username);
+
+    if (!img) {
+        ctx.status = 404;
+        ctx.body = { success: false, message: '未找到头像' };
+    } else {
+        ctx.status = 200;
+        ctx.body = { success: true, data: img };
+    }
 }
+
+export { getAtAvatarPath };
+export default {
+    'GET /atavatar/:username': atAvatar
+};

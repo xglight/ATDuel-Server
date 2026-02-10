@@ -1,55 +1,37 @@
-// check_login.mjs
+// admin_check.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import { verifyAdmin } from '../utils/auth.mjs';
 
-async function check_login(ctx, next) {
+/**
+ * 管理员登录状态校验接口
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function checkAdminLogin(ctx) {
     const { token } = ctx.request.body;
 
     if (!token) {
-        ctx.body = { success: false, message: 'token can not be empty' };
+        ctx.status = 400;
+        ctx.body = { success: false, message: 'Token 不能为空' };
         return;
     }
-    logger.debug('admin_check: Admin login check request: ', token);
+    logger.debug(`admin_check: 管理员登录检查: ${token}`);
 
     try {
-        const [rows] = await pool.execute(
-            'SELECT loginTime FROM admin_status WHERE token = ? LIMIT 1',
-            [token]
-        );
-
-        if (rows.length === 0) {
-            ctx.status = 401;
-            ctx.body = { success: false, message: 'user not login' };
-            return;
-        }
-
-        const loginTime = new Date(rows[0].loginTime);
-        const now = Date.now();
-        const expireTime = 24 * 60 * 60 * 1000;
-
-        if (now - loginTime.getTime() < expireTime) {
-            await pool.execute(
-                'UPDATE admin_status SET loginTime = CURRENT_TIMESTAMP WHERE token = ?',
-                [token]
-            );
-            ctx.body = { success: true, message: 'login success' };
+        if (await verifyAdmin(token)) {
+            ctx.status = 200;
+            ctx.body = { success: true, message: '登录状态有效' };
         } else {
-            await pool.execute(
-                'DELETE FROM admin_status WHERE token = ?',
-                [token]
-            );
-            logger.debug('admin_check: Login expired');
             ctx.status = 401;
-            ctx.body = { success: false, message: 'login expired' };
+            ctx.body = { success: false, message: '管理员未登录或已过期' };
         }
     } catch (error) {
-        logger.error('admin_check: Query error: ', error);
+        logger.error(`admin_check: 查询错误: ${error.message}`);
         ctx.status = 500;
-        ctx.type = 'text/json';
-        ctx.body = { success: false, message: 'Server Error' };
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 
 export default {
-    'POST /admin/check': check_login
+    'POST /admin/check': checkAdminLogin
 };

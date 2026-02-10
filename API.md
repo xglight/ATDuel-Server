@@ -28,23 +28,22 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述   |
-| :------: | :----: | :---: | :----- |
-| username | string |  是   | 用户名 |
-| password | string |  是   | 密码 (Base64 编码) |
-|  token   | string |  s   | token  |
-| rememberMe | int | 否 | 是否记住登录 (0: 否, 1: 是) |
+|   参数名   |  类型  | 必填  | 描述                        |
+| :--------: | :----: | :---: | :-------------------------- |
+|  username  | string |  是   | 用户名                      |
+|  password  | string |  是   | 密码 (Base64 编码)          |
+|   token    | string |  是   | 登录用的 token              |
+| rememberMe |  int   |  否   | 是否记住登录 (0: 否, 1: 是) |
 
 #### 返回值
 
-| 状态码 | 类型  | 描述             |
-| :----: | :---: | :--------------- |
-|  200   | json  | 登录成功         |
-|  400   | json  | 参数缺失         |
-|  401   | json  | 用户名或密码错误 |
-|  403   | json  | 用户被封禁       |
-|  404   | json  | 用户不存在       |
-|  500   | json  | 服务器错误       |
+| 状态码 | 类型  | 描述                                                         |
+| :----: | :---: | :----------------------------------------------------------- |
+|  200   | json  | { success: true, message: "登录成功" }                       |
+|  400   | json  | { success: false, message: "用户名、密码和 Token 不能为空" } |
+|  401   | json  | { success: false, message: "用户名或密码错误" }              |
+|  403   | json  | { success: false, message: "您已被封禁至...，原因: ..." }    |
+|  500   | json  | { success: false, message: "服务器内部错误" }                |
 
 ---
 
@@ -63,13 +62,13 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型  | 描述       |
-| :----: | :---: | :--------- |
-|  200   | json  | 登录有效   |
-|  400   | json  | 参数缺失   |
-|  401   | json  | 未登录或已过期 |
-|  403   | json  | 用户被封禁 |
-|  500   | json  | 服务器错误 |
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, message: "登录有效" }        |
+|  400   | json  | { success: false, message: "参数缺失" }       |
+|  401   | json  | { success: false, message: "未登录或已过期" } |
+|  403   | json  | { success: false, message: "用户被封禁" }     |
+|  500   | json  | { success: false, message: "服务器错误" }     |
 
 ---
 
@@ -87,12 +86,12 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型  | 描述       |
-| :----: | :---: | :--------- |
-|  200   | string | Affiliation 信息 |
-|  400   | string | 参数缺失   |
-|  404   | string | 用户不存在 |
-|  500   | string | 服务器错误 |
+| 状态码 | 类型  | 描述                                            |
+| :----: | :---: | :---------------------------------------------- |
+|  200   | json  | { success: true, data: "Affiliation" }          |
+|  400   | json  | { success: false, message: "用户名不能为空" }   |
+|  404   | json  | { success: false, message: "AtCoder 用户存在" } |
+|  500   | json  | { success: false, message: "服务器内部错误" }   |
 
 ---
 
@@ -111,12 +110,12 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型  | 描述       |
-| :----: | :---: | :--------- |
-|  200   | text  | 登出成功   |
-|  400   | json  | 参数缺失   |
-|  401   | json  | 用户或登录信息不存在 |
-|  500   | text  | 服务器错误 |
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, message: "登出成功" }        |
+|  400   | json  | { success: false, message: "参数缺失" }       |
+|  401   | json  | { success: false, message: "未登录或已过期" } |
+|  500   | json  | { success: false, message: "服务器错误" }     |
 
 ---
 
@@ -128,19 +127,46 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述          |
-| :------: | :----: | :---: | :------------ |
-| username | string |  是   | ATDuel 用户名 |
-| password | string |  是   | 密码          |
-|  ATName  | string |  是   | AtCoder 用户名 |
+|  参数名  |  类型  | 必填  | 描述               |
+| :------: | :----: | :---: | :----------------- |
+| username | string |  是   | ATDuel 用户名      |
+| password | string |  是   | 密码 (Base64 编码) |
+|  ATName  | string |  是   | AtCoder 用户名     |
 
 #### 返回值
 
-| 状态码 | 类型  | 描述                   |
-| :----: | :---: | :--------------------- |
-|  200   | json  | 注册成功               |
-|  400   | json  | 参数缺失/用户名已存在/AtCoder名已存在/Rating不足 |
-|  500   | json  | 服务器错误             |
+| 状态码 | 类型  | 描述                                                                            |
+| :----: | :---: | :------------------------------------------------------------------------------ |
+|  200   | json  | { success: true, message: "注册成功" }                                          |
+|  400   | json  | { success: false, message: "参数缺失/用户名已存在/AtCoder名已存在/Rating不足" } |
+|  500   | json  | { success: false, message: "服务器错误" }                                       |
+
+---
+
+### POST /change_password
+
+#### 说明
+
+修改用户密码。验证当前密码并更新为新密码，更新后将强制该用户在所有设备上重新登录。
+
+#### 请求参数
+
+|   参数名    |  类型  | 必填  | 描述                   |
+| :---------: | :----: | :---: | :--------------------- |
+|  username   | string |  是   | 用户名                 |
+|    token    | string |  是   | token                  |
+| oldPassword | string |  是   | 当前密码 (Base64 编码) |
+| newPassword | string |  是   | 新密码 (Base64 编码)   |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                |
+| :----: | :---: | :-------------------------------------------------- |
+|  200   | json  | { success: true, message: "密码修改成功" }          |
+|  400   | json  | { success: false, message: "参数缺失" }             |
+|  401   | json  | { success: false, message: "未登录或当前密码错误" } |
+|  404   | json  | { success: false, message: "用户不存在" }           |
+|  500   | json  | { success: false, message: "服务器错误" }           |
 
 ---
 
@@ -148,7 +174,7 @@ function copyApiDoc() {
 
 #### 说明
 
-获取用户 ATDuel 的头像 URL。
+获取用户 ATDuel 的头像路径。
 
 #### 请求参数
 
@@ -158,12 +184,12 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 |  类型  | 描述       |
-| :----: | :----: | :--------- |
-|  200   | string | 头像 URL   |
-|  400   |  json  | 参数缺失   |
-|  404   |  text  | 用户不存在 |
-|  500   |  text  | 服务器错误 |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: "头像路径" }       |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  404   | json  | { success: false, message: "用户不存在" } |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -181,12 +207,12 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 |     类型      | 描述       |
-| :----: | :-----------: | :--------- |
-|  200   | string | ATDuel 用户名 |
-|  400   |     json      | 参数缺失   |
-|  404   |     json      | 用户不存在 |
-|  500   |     json      | 服务器错误 |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: "ATDuel 用户名" }  |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  404   | json  | { success: false, message: "用户不存在" } |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -198,18 +224,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述           | 位置  |
-| :------: | :----: | :---: | :------------- | :---: |
+|  参数名  |  类型  | 必填  | 描述          | 位置  |
+| :------: | :----: | :---: | :------------ | :---: |
 | username | string |  是   | ATDuel 用户名 | path  |
 
 #### 返回值
 
-| 状态码 |     类型      | 描述       |
-| :----: | :-----------: | :--------- |
-|  200   | string | AtCoder 用户名 |
-|  400   |     json      | 参数缺失   |
-|  404   |     json      | 用户不存在 |
-|  500   |     json      | 服务器错误 |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: "AtCoder 用户名" } |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  404   | json  | { success: false, message: "用户不存在" } |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -221,18 +247,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述           | 位置  |
-| :------: | :----: | :---: | :------------- | :---: |
+|  参数名  |  类型  | 必填  | 描述          | 位置  |
+| :------: | :----: | :---: | :------------ | :---: |
 | username | string |  是   | ATDuel 用户名 | path  |
 
 #### 返回值
 
-| 状态码 | 类型  | 描述       |
-| :----: | :---: | :--------- |
-|  200   |  int  | 用户 Rating   |
-|  400   | json  | 参数缺失   |
-|  404   | json  | 用户不存在 |
-|  500   | text  | 服务器错误 |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: 1200 }             |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  404   | json  | { success: false, message: "用户不存在" } |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -244,11 +270,11 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型 | 描述 |
-| :---: | :---: | :--- |
-| 200 | json | 比赛历史列表 |
-| 400 | json | 参数缺失 |
-| 500 | json | 服务器错误 |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: [...] }            |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -260,11 +286,11 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型 | 描述 |
-| :---: | :---: | :--- |
-| 200 | json | 比赛 ID 数组 |
-| 400 | json | 参数缺失 |
-| 500 | json | 服务器错误 |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: [...] }            |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -276,9 +302,17 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| username | string | 是 | ATDuel 用户名 |
+|  参数名  |  类型  | 必填  | 描述          |
+| :------: | :----: | :---: | :------------ |
+| username | string |  是   | ATDuel 用户名 |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, message: "同步成功" }    |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -292,10 +326,10 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型  | 描述         |
-| :----: | :---: | :----------- |
-|  200   | json  | 比赛列表 |
-|  500   | text  | 服务器错误   |
+| 状态码 | 类型  | 描述                           |
+| :----: | :---: | :----------------------------- |
+|  200   | json  | { success: true, data: [...] } |
+|  500   | json  | 服务器错误                     |
 
 ---
 
@@ -307,17 +341,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 |  类型  | 必填  | 描述   | 位置  |
-| :----: | :----: | :---: | :----- | :---: |
+| 参数名 |  类型  | 必填  | 描述        | 位置  |
+| :----: | :----: | :---: | :---------- | :---: |
 |   id   | string |  是   | 比赛 URL ID | path  |
 
 #### 返回值
 
-| 状态码 | 类型  | 描述       |
-| :----: | :---: | :--------- |
-|  200   | json  | 比赛详情   |
-|  404   | text  | 比赛不存在 |
-|  500   | text  | 服务器错误 |
+| 状态码 | 类型  | 描述                           |
+| :----: | :---: | :----------------------------- |
+|  200   | json  | { success: true, data: {...} } |
+|  400   | json  | 比赛 URL 不能为空              |
+|  404   | json  | 未找到该比赛                   |
+|  500   | json  | 服务器错误                     |
 
 ---
 
@@ -329,9 +364,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 |  类型  | 必填  |  描述  |
-| :----: | :----: | :---: | :----: |
+| 参数名  |  类型  | 必填  |    描述     |
+| :-----: | :----: | :---: | :---------: |
 | room_id | string |  是   | 房间 URL ID |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                       |
+| :----: | :---: | :--------------------------------------------------------- |
+|  200   | json  | { success: true, message: "比赛已开始", contestId: "..." } |
+|  400   | json  | { success: false, message: "房间 ID 不能为空" }            |
+|  404   | json  | { success: false, message: "未找到该房间" }                |
+|  500   | json  | { success: false, message: "服务器内部错误" }              |
 
 ---
 
@@ -343,11 +387,19 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名   |  类型  | 必填  | 描述   |
-| :-------: | :----: | :---: | :----- |
-| contestId | string |  是   | 比赛 URL ID |
-| username  | string |  是   | ATDuel 用户名 |
+|  参数名   |  类型  | 必填  | 描述              |
+| :-------: | :----: | :---: | :---------------- |
+| contestId | string |  是   | 比赛 URL ID       |
+| username  | string |  是   | ATDuel 用户名     |
 |   title   | string |  是   | 题目名 (包含编号) |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, message: "分数已更新" }  |
+|  400   | json  | { success: false, message: "参数缺失" }   |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -359,12 +411,22 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|   参数名    |  类型  | 必填  | 描述   |
-| :---------: | :----: | :---: | :----- |
-| problemTitle| string |  是   | 题目名 |
-|  contestId  | string |  是   | 比赛 URL ID |
-|  username   | string |  是   | 当前请求用户名 |
-|   token     | string |  是   | 用户 token |
+|    参数名    |  类型  | 必填  | 描述           |
+| :----------: | :----: | :---: | :------------- |
+| problemTitle | string |  是   | 题目名         |
+|  contestId   | string |  是   | 比赛 URL ID    |
+|   username   | string |  是   | 当前请求用户名 |
+|    token     | string |  是   | 用户 token     |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "提交记录已更新" }       |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  403   | json  | { success: false, message: "非比赛参赛者" }        |
+|  404   | json  | { success: false, message: "比赛不存在" }          |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -376,10 +438,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| team | string | 否 | 触发结算的队伍 |
+|  参数名   |  类型  | 必填  | 描述        |
+| :-------: | :----: | :---: | :---------- |
+| contestId | string |  是   | 比赛 URL ID |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                            |
+| :----: | :---: | :---------------------------------------------- |
+|  200   | json  | { success: true, message: "结算成功" }          |
+|  400   | json  | { success: false, message: "比赛 ID 不能为空" } |
+|  404   | json  | { success: false, message: "未找到该比赛" }     |
+|  500   | json  | { success: false, message: "服务器错误" }       |
 
 ---
 
@@ -391,11 +461,20 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名   |  类型  | 必填  | 描述     | 位置  |
-| :-------: | :----: | :---: | :------- | :---- |
-| contestId | string |  是   | 比赛 URL ID   | path  |
-|   page    |  int   |  否   | 页数 (默认 1) | query |
+|  参数名   |  类型  | 必填  | 描述               | 位置  |
+| :-------: | :----: | :---: | :----------------- | :---- |
+| contestId | string |  是   | 比赛 URL ID        | path  |
+|   page    |  int   |  否   | 页数 (默认 1)      | query |
 | pageSize  |  int   |  否   | 每页数量 (默认 10) | query |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                        |
+| :----: | :---: | :---------------------------------------------------------- |
+|  200   | json  | { success: true, data: { submissions: [...], total: ... } } |
+|  400   | json  | { success: false, message: "参数无效" }                     |
+|  404   | json  | { success: false, message: "未找到该比赛" }                 |
+|  500   | json  | { success: false, message: "服务器错误" }                   |
 
 ---
 
@@ -403,16 +482,25 @@ function copyApiDoc() {
 
 #### 说明
 
-在比赛中发起换题请求。
+在比赛中发起换题请求。需对方在限时内同意。
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| problemId | string | 是 | 题目 ID |
-| username | string | 是 | 发起者用户名 |
-| token | string | 是 | 发起者 token |
+|  参数名   |  类型  | 必填  | 描述         |
+| :-------: | :----: | :---: | :----------- |
+| contestId | string |  是   | 比赛 URL ID  |
+| problemId | string |  是   | 题目 ID      |
+| username  | string |  是   | 发起者用户名 |
+|   token   | string |  是   | 发起者 token |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "请求发起成功" }         |
+|  400   | json  | { success: false, message: "参数无效" }            |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -424,13 +512,22 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| requestId | string | 是 | 请求 ID |
-| action | string | 是 | `accept` 或 `reject` |
-| username | string | 是 | 响应者用户名 |
-| token | string | 是 | 响应者 token |
+|  参数名   |  类型  | 必填  | 描述                               |
+| :-------: | :----: | :---: | :--------------------------------- |
+| contestId | string |  是   | 比赛 URL ID                        |
+| requestId | string |  是   | 请求 ID                            |
+|  action   | string |  是   | `accept` (接受) 或 `reject` (拒绝) |
+| username  | string |  是   | 响应者用户名                       |
+|   token   | string |  是   | 响应者 token                       |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "响应处理成功" }         |
+|  400   | json  | { success: false, message: "参数无效" }            |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -442,12 +539,21 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| type | string | 是 | 请求类型: `draw` (平局) 或 `surrender` (认输) |
-| username | string | 是 | 发起者用户名 |
-| token | string | 是 | 发起者 token |
+|  参数名   |  类型  | 必填  | 描述                                          |
+| :-------: | :----: | :---: | :-------------------------------------------- |
+| contestId | string |  是   | 比赛 URL ID                                   |
+|   type    | string |  是   | 请求类型: `draw` (平局) 或 `surrender` (认输) |
+| username  | string |  是   | 发起者用户名                                  |
+|   token   | string |  是   | 发起者 token                                  |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "请求发起成功" }         |
+|  400   | json  | { success: false, message: "参数无效" }            |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -459,13 +565,22 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| requestId | string | 是 | 请求 ID |
-| action | string | 是 | 响应动作: `accept` (同意) 或 `reject` (拒绝) |
-| username | string | 是 | 投票者用户名 |
-| token | string | 是 | 投票者 token |
+|  参数名   |  类型  | 必填  | 描述                                         |
+| :-------: | :----: | :---: | :------------------------------------------- |
+| contestId | string |  是   | 比赛 URL ID                                  |
+| requestId | string |  是   | 请求 ID                                      |
+|  action   | string |  是   | 响应动作: `accept` (同意) 或 `reject` (拒绝) |
+| username  | string |  是   | 投票者用户名                                 |
+|   token   | string |  是   | 投票者 token                                 |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "投票成功" }             |
+|  400   | json  | { success: false, message: "参数无效" }            |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -479,10 +594,10 @@ function copyApiDoc() {
 
 #### 返回值
 
-| 状态码 | 类型  | 描述         |
-| :----: | :---: | :----------- |
-|  200   | json  | 房间列表 |
-|  500   | text  | 服务器错误   |
+| 状态码 | 类型  | 描述                                      |
+| :----: | :---: | :---------------------------------------- |
+|  200   | json  | { success: true, data: [...] }            |
+|  500   | json  | { success: false, message: "服务器错误" } |
 
 ---
 
@@ -494,9 +609,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 |  类型  | 必填  | 描述   | 位置  |
-| :----: | :----: | :---: | :----- | :---: |
+| 参数名 |  类型  | 必填  | 描述        | 位置  |
+| :----: | :----: | :---: | :---------- | :---: |
 |   id   | string |  是   | 房间 URL ID | path  |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                            |
+| :----: | :---: | :---------------------------------------------- |
+|  200   | json  | { success: true, data: {...} }                  |
+|  400   | json  | { success: false, message: "房间 ID 不能为空" } |
+|  404   | json  | { success: false, message: "未找到该房间" }     |
+|  500   | json  | { success: false, message: "服务器内部错误" }   |
 
 ---
 
@@ -508,15 +632,24 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| username | string | 是 | 房主用户名 |
-| token | string | 是 | 房主 token |
-| playerCount | string | 否 | 模式 (如 `1v1`, `2v2`) |
-| isRated | bool | 否 | 是否 Rated |
-| ratingMin | int | 否 | 难度下限 |
-| ratingMax | int | 否 | 难度上限 |
-| problemCount | int | 否 | 题目数量 |
+|    参数名    |  类型  | 必填  | 描述                   |
+| :----------: | :----: | :---: | :--------------------- |
+|   username   | string |  是   | 房主用户名             |
+|    token     | string |  是   | 房主 token             |
+| playerCount  | string |  否   | 模式 (如 `1v1", `2v2`) |
+|   isRated    |  bool  |  否   | 是否 Rated             |
+|  ratingMin   |  int   |  否   | 难度下限               |
+|  ratingMax   |  int   |  否   | 难度上限               |
+| problemCount |  int   |  否   | 题目数量               |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                      |
+| :----: | :---: | :-------------------------------------------------------- |
+|  200   | json  | { success: true, message: "房间创建成功", roomId: "..." } |
+|  400   | json  | { success: false, message: "参数缺失" }                   |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" }        |
+|  500   | json  | { success: false, message: "服务器内部错误" }             |
 
 ---
 
@@ -528,9 +661,21 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 |  类型  | 必填  | 描述   |
-| :----: | :----: | :---: | :----- |
-| room_id | string |  是   | 房间 URL ID |
+|  参数名  |  类型  | 必填  | 描述        |
+| :------: | :----: | :---: | :---------- |
+| room_id  | string |  是   | 房间 URL ID |
+| username | string |  是   | 房主用户名  |
+|  token   | string |  是   | 房主 token  |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                            |
+| :----: | :---: | :---------------------------------------------- |
+|  200   | json  | { success: true, message: "房间已删除" }        |
+|  400   | json  | { success: false, message: "参数缺失" }         |
+|  401   | json  | { success: false, message: "未登录或权限不足" } |
+|  404   | json  | { success: false, message: "房间不存在" }       |
+|  500   | json  | { success: false, message: "服务器错误" }       |
 
 ---
 
@@ -542,12 +687,23 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述     |
-| :------: | :----: | :---: | :------- |
-| room_id  | string |  是   | 房间 URL ID |
+|  参数名  |  类型  | 必填  | 描述              |
+| :------: | :----: | :---: | :---------------- |
+| room_id  | string |  是   | 房间 URL ID       |
 |   team   | string |  是   | 队伍 (`A` 或 `B`) |
-| position |  int   |  是   | 队伍内位置 |
-|  ready   |  bool  |  是   | 是否准备 |
+| position |  int   |  是   | 队伍内位置        |
+|  ready   |  bool  |  是   | 是否准备          |
+| username | string |  是   | 用户名            |
+|  token   | string |  是   | token             |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "状态已更新" }           |
+|  400   | json  | { success: false, message: "参数缺失" }            |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -559,13 +715,24 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述                       |
-| :------: | :----: | :---: | :------------------------- |
-|  roomId  | string |  是   | 房间 URL ID                     |
+|  参数名  |  类型  | 必填  | 描述                    |
+| :------: | :----: | :---: | :---------------------- |
+|  roomId  | string |  是   | 房间 URL ID             |
 |    op    |  int   |  是   | 操作 (0: 退出, 1: 加入) |
-|   team   |  int   |  是   | 队伍 (1: A, 2: B) |
-| username | string |  是   | 用户名 |
-|   pos    |  int   |  否   | 位置 (仅加入时有效) |
+|   team   |  int   |  是   | 队伍 (1: A, 2: B)       |
+| username | string |  是   | 用户名                  |
+|  token   | string |  是   | token                   |
+|   pos    |  int   |  否   | 位置 (仅加入时有效)     |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                               |
+| :----: | :---: | :------------------------------------------------- |
+|  200   | json  | { success: true, message: "操作成功" }             |
+|  400   | json  | { success: false, message: "参数无效" }            |
+|  401   | json  | { success: false, message: "未登录或 Token 无效" } |
+|  403   | json  | { success: false, message: "房间已满或无法加入" }  |
+|  500   | json  | { success: false, message: "服务器错误" }          |
 
 ---
 
@@ -575,21 +742,22 @@ function copyApiDoc() {
 
 #### 说明
 
-直接从 AtCoder 抓取用户的头像。
+直接从 AtCoder 抓取用户的头像 URL。
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述          | 位置  |
-| :------: | :----: | :---: | :------------ | :---: |
+|  参数名  |  类型  | 必填  | 描述           | 位置  |
+| :------: | :----: | :---: | :------------- | :---: |
 | username | string |  是   | AtCoder 用户名 | path  |
 
 #### 返回值
 
-| 状态码 |  类型  | 描述       |
-| :----: | :----: | :--------- |
-|  200   | string | 头像 URL   |
-|  404   |  text  | 未找到     |
-|  500   |  text  | 服务器错误 |
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, data: "头像 URL" }           |
+|  400   | json  | { success: false, message: "用户名不能为空" } |
+|  404   | json  | { success: false, message: "未找到头像" }     |
+|  500   | json  | { success: false, message: "服务器错误" }     |
 
 ---
 
@@ -601,17 +769,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述          | 位置  |
-| :------: | :----: | :---: | :------------ | :---: |
+|  参数名  |  类型  | 必填  | 描述           | 位置  |
+| :------: | :----: | :---: | :------------- | :---: |
 | username | string |  是   | AtCoder 用户名 | path  |
 
 #### 返回值
 
-| 状态码 | 类型  | 描述       |
-| :----: | :---: | :--------- |
-|  200   |  int  | 用户 Rating   |
-|  404   | text  | 未找到 |
-|  500   | text  | 服务器错误 |
+| 状态码 | 类型  | 描述                                                 |
+| :----: | :---: | :--------------------------------------------------- |
+|  200   | json  | { success: true, data: 1200 }                        |
+|  400   | json  | { success: false, message: "用户名不能为空" }        |
+|  404   | json  | { success: false, message: "未找到该用户的 Rating" } |
+|  500   | json  | { success: false, message: "服务器错误" }            |
 
 ---
 
@@ -619,15 +788,41 @@ function copyApiDoc() {
 
 #### 说明
 
-获取 AtCoder 用户的提交记录 (通常用于同步)。
+获取 AtCoder 用户的提交记录。
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述          |
-| :------: | :----: | :---: | :------------ |
-| username | string |  是   | AtCoder 用户名 |
+|   参数名   |  类型  | 必填  | 描述           |
+| :--------: | :----: | :---: | :------------- |
+|  username  | string |  是   | AtCoder 用户名 |
 | problem_id | string |  是   | 题目 ID        |
-| startTime | string | 是 | 比赛开始时间 |
+| startTime  | string |  是   | 比赛开始时间   |
+|  contest   | string |  否   | 题目所属比赛名 |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, data: [...] }                |
+|  400   | json  | { success: false, message: "参数无效" }       |
+|  500   | json  | { success: false, message: "服务器内部错误" } |
+
+---
+
+## 公告相关
+
+### GET /bulletins
+
+#### 说明
+
+获取所有公告列表。
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, data: [...] }                |
+|  500   | json  | { success: false, message: "服务器内部错误" } |
 
 ---
 
@@ -641,11 +836,20 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| username | string | 否 | 管理员用户名 (默认 `admin`) |
-| password | string | 是 | 密码 |
-| token | string | 是 | 登录 token |
+|  参数名  |  类型  | 必填  | 描述                        |
+| :------: | :----: | :---: | :-------------------------- |
+| username | string |  否   | 管理员用户名 (默认 `admin`) |
+| password | string |  是   | 密码 (Base64 编码)          |
+|  token   | string |  是   | 登录 token                  |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                            |
+| :----: | :---: | :---------------------------------------------- |
+|  200   | json  | { success: true, message: "登录成功" }          |
+|  400   | json  | { success: false, message: "参数缺失" }         |
+|  401   | json  | { success: false, message: "用户名或密码错误" } |
+|  500   | json  | { success: false, message: "服务器内部错误" }   |
 
 ---
 
@@ -657,9 +861,18 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| token | string | 是 | 管理员 token |
+| 参数名 |  类型  | 必填  | 描述         |
+| :----: | :----: | :---: | :----------- |
+| token  | string |  是   | 管理员 token |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, message: "登录状态有效" }    |
+|  400   | json  | { success: false, message: "Token 不能为空" } |
+|  401   | json  | { success: false, message: "管理员未登录" }   |
+|  500   | json  | { success: false, message: "服务器错误" }     |
 
 ---
 
@@ -671,10 +884,19 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| token | string | 是 | 管理员 token |
-| query | string | 否 | 搜索过滤字符串 |
+| 参数名 |  类型  | 必填  | 描述           |
+| :----: | :----: | :---: | :------------- |
+| token  | string |  是   | 管理员 token   |
+| query  | string |  否   | 搜索过滤字符串 |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                        |
+| :----: | :---: | :------------------------------------------ |
+|  200   | json  | { success: true, data: [...] }              |
+|  401   | json  | { success: false, message: "管理员未登录" } |
+|  403   | json  | { success: false, message: "未授权" }       |
+|  500   | json  | { success: false, message: "服务器错误" }   |
 
 ---
 
@@ -686,12 +908,21 @@ function copyApiDoc() {
 
 #### 请求参数
 
-|  参数名  |  类型  | 必填  | 描述     |
-| :------: | :----: | :---: | :------- |
-| username | string |  是   | 用户名   |
-|  token   | string |  是   | 管理员 token |
-|  reason  | string |  否   | 封禁原因 |
-| endBanTime| string |  是   | 封禁截止时间 |
+|   参数名   |  类型  | 必填  | 描述         |
+| :--------: | :----: | :---: | :----------- |
+|  username  | string |  是   | 用户名       |
+|   token    | string |  是   | 管理员 token |
+|   reason   | string |  否   | 封禁原因     |
+| endBanTime | string |  是   | 封禁截止时间 |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                        |
+| :----: | :---: | :------------------------------------------ |
+|  200   | json  | { success: true, message: "封禁成功" }      |
+|  400   | json  | { success: false, message: "参数缺失" }     |
+|  401   | json  | { success: false, message: "权限校验失败" } |
+|  500   | json  | { success: false, message: "服务器错误" }   |
 
 ---
 
@@ -703,10 +934,19 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| username | string | 是 | 用户名 |
-| token | string | 是 | 管理员 token |
+|  参数名  |  类型  | 必填  | 描述         |
+| :------: | :----: | :---: | :----------- |
+| username | string |  是   | 用户名       |
+|  token   | string |  是   | 管理员 token |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                        |
+| :----: | :---: | :------------------------------------------ |
+|  200   | json  | { success: true, message: "解封成功" }      |
+|  400   | json  | { success: false, message: "参数缺失" }     |
+|  401   | json  | { success: false, message: "权限校验失败" } |
+|  500   | json  | { success: false, message: "服务器错误" }   |
 
 ---
 
@@ -718,10 +958,19 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| token | string | 是 | 管理员 token |
-| date | string | 否 | 指定日期 (如 `2024-01-01`), 不传则返回最新日志 |
+| 参数名 |  类型  | 必填  | 描述                                           |
+| :----: | :----: | :---: | :--------------------------------------------- |
+| token  | string |  是   | 管理员 token                                   |
+|  date  | string |  否   | 指定日期 (如 `2024-01-01`), 不传则返回最新日志 |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                          |
+| :----: | :---: | :-------------------------------------------- |
+|  200   | json  | { success: true, data: "日志内容" }           |
+|  400   | json  | { success: false, message: "Token 不能为空" } |
+|  401   | json  | { success: false, message: "权限校验失败" }   |
+|  500   | json  | { success: false, message: "服务器错误" }     |
 
 ---
 
@@ -733,10 +982,20 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| token | string | 是 | 管理员 token |
+|  参数名   |  类型  | 必填  | 描述         |
+| :-------: | :----: | :---: | :----------- |
+| contestId | string |  是   | 比赛 URL ID  |
+|   token   | string |  是   | 管理员 token |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                              |
+| :----: | :---: | :------------------------------------------------ |
+|  200   | json  | { success: true, message: "比赛已删除" }          |
+|  400   | json  | { success: false, message: "参数缺失" }           |
+|  401   | json  | { success: false, message: "管理员权限校验失败" } |
+|  404   | json  | { success: false, message: "比赛不存在" }         |
+|  500   | json  | { success: false, message: "服务器内部错误" }     |
 
 ---
 
@@ -748,14 +1007,24 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| contestId | string | 是 | 比赛 URL ID |
-| token | string | 是 | 管理员 token |
-| startTime | string | 否 | 开始时间 (ISO 格式) |
-| endTime | string | 否 | 结束时间 (ISO 格式) |
-| rated | bool | 否 | 是否 Rated |
-| status | int | 否 | 状态 (0: 未开始, 1: 进行中, 2: 已结束) |
+|  参数名   |  类型  | 必填  | 描述                                   |
+| :-------: | :----: | :---: | :------------------------------------- |
+| contestId | string |  是   | 比赛 URL ID                            |
+|   token   | string |  是   | 管理员 token                           |
+| startTime | string |  否   | 开始时间 (ISO 格式)                    |
+|  endTime  | string |  否   | 结束时间 (ISO 格式)                    |
+|   rated   |  bool  |  否   | 是否 Rated                             |
+|  status   |  int   |  否   | 状态 (0: 未开始, 1: 进行中, 2: 已结束) |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                              |
+| :----: | :---: | :------------------------------------------------ |
+|  200   | json  | { success: true, message: "比赛信息已更新" }      |
+|  400   | json  | { success: false, message: "参数缺失" }           |
+|  401   | json  | { success: false, message: "管理员权限校验失败" } |
+|  404   | json  | { success: false, message: "比赛不存在" }         |
+|  500   | json  | { success: false, message: "服务器内部错误" }     |
 
 ---
 
@@ -767,10 +1036,20 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| roomId | string | 是 | 房间 ID 或 URL ID |
-| token | string | 是 | 管理员 token |
+| 参数名 |  类型  | 必填  | 描述              |
+| :----: | :----: | :---: | :---------------- |
+| roomId | string |  是   | 房间 ID 或 URL ID |
+| token  | string |  是   | 管理员 token      |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                              |
+| :----: | :---: | :------------------------------------------------ |
+|  200   | json  | { success: true, message: "房间已关闭" }          |
+|  400   | json  | { success: false, message: "参数缺失" }           |
+|  401   | json  | { success: false, message: "管理员权限校验失败" } |
+|  404   | json  | { success: false, message: "房间不存在" }         |
+|  500   | json  | { success: false, message: "服务器内部错误" }     |
 
 ---
 
@@ -782,9 +1061,17 @@ function copyApiDoc() {
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| token | string | 是 | 管理员 token |
+| 参数名 |  类型  | 必填  | 描述         |
+| :----: | :----: | :---: | :----------- |
+| token  | string |  是   | 管理员 token |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                    |
+| :----: | :---: | :------------------------------------------------------ |
+|  200   | json  | { success: true, message: "已清理 ... 个已结束的比赛" } |
+|  401   | json  | { success: false, message: "管理员权限校验失败" }       |
+|  500   | json  | { success: false, message: "服务器内部错误" }           |
 
 ---
 
@@ -792,13 +1079,71 @@ function copyApiDoc() {
 
 #### 说明
 
-管理员清空所有房间及其关联数据。
+管理员清空所有空房间。
 
 #### 请求参数
 
-| 参数名 | 类型 | 必填 | 描述 |
-| :---: | :---: | :---: | :--- |
-| token | string | 是 | 管理员 token |
+| 参数名 |  类型  | 必填  | 描述         |
+| :----: | :----: | :---: | :----------- |
+| token  | string |  是   | 管理员 token |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                              |
+| :----: | :---: | :------------------------------------------------ |
+|  200   | json  | { success: true, message: "已清理 ... 个空房间" } |
+|  401   | json  | { success: false, message: "管理员权限校验失败" } |
+|  500   | json  | { success: false, message: "服务器内部错误" }     |
+
+---
+
+### POST /admin/bulletin_add
+
+#### 说明
+
+管理员发布新公告。
+
+#### 请求参数
+
+| 参数名  |  类型  | 必填  | 描述         |
+| :-----: | :----: | :---: | :----------- |
+|  token  | string |  是   | 管理员 token |
+|  title  | string |  是   | 公告标题     |
+| content | string |  是   | 公告内容     |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                         |
+| :----: | :---: | :----------------------------------------------------------- |
+|  200   | json  | { success: true, message: "公告已发布" }                     |
+|  400   | json  | { success: false, message: "标题、内容和 Token 均不能为空" } |
+|  401   | json  | { success: false, message: "管理员权限校验失败" }            |
+|  500   | json  | { success: false, message: "服务器内部错误" }                |
+
+---
+
+### POST /admin/bulletin_delete
+
+#### 说明
+
+管理员删除指定公告。
+
+#### 请求参数
+
+| 参数名 |  类型  | 必填  | 描述         |
+| :----: | :----: | :---: | :----------- |
+| token  | string |  是   | 管理员 token |
+|   id   |  int   |  是   | 公告 ID      |
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                  |
+| :----: | :---: | :---------------------------------------------------- |
+|  200   | json  | { success: true, message: "公告已删除" }              |
+|  400   | json  | { success: false, message: "ID 和 Token 均不能为空" } |
+|  401   | json  | { success: false, message: "管理员权限校验失败" }     |
+|  404   | json  | { success: false, message: "公告不存在" }             |
+|  500   | json  | { success: false, message: "服务器内部错误" }         |
 
 ---
 
@@ -810,6 +1155,12 @@ function copyApiDoc() {
 
 获取前端所需的公开配置信息 (如注册限制、题目限制等)。
 
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                                        |
+| :----: | :---: | :-------------------------------------------------------------------------- |
+|  200   | json  | { success: true, data: { register: {...}, content: {...}, server: {...} } } |
+
 ---
 
 ### GET /health
@@ -817,3 +1168,10 @@ function copyApiDoc() {
 #### 说明
 
 检查服务健康状态，返回系统运行时间及用户、比赛、房间数量。
+
+#### 返回值
+
+| 状态码 | 类型  | 描述                                                                                                                        |
+| :----: | :---: | :-------------------------------------------------------------------------------------------------------------------------- |
+|  200   | json  | { success: true, data: { status: "ok", uptime: ..., timestamp: "...", userCount: ..., contestCount: ..., roomCount: ... } } |
+|  500   | json  | { success: false, message: "服务器内部错误" }                                                                               |

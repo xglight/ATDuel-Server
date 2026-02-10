@@ -6,36 +6,38 @@ import { updateUserAC } from './user_ac_update.mjs';
 
 /**
  * 获取房间内所有人 AC 过的题目集合
- * @param {string[]} usernames 用户名数组
+ * 
+ * @param {string[]} usernames - 用户名数组
  * @returns {Promise<Set<string>>} AC 过的题目 ID 集合
  */
 async function getAcceptedProblems(usernames) {
     if (!usernames || usernames.length === 0) return new Set();
     try {
-        const [rows] = await pool.query(
+        const [rows] = await pool.execute(
             'SELECT DISTINCT problem_id FROM user_problem_accept WHERE username IN (?)',
             [usernames]
         );
         return new Set(rows.map(row => row.problem_id));
     } catch (err) {
-        logger.error(`getAcceptedProblems: Failed to fetch AC records: ${err.message}`);
+        logger.error(`getAcceptedProblems: 无法获取 AC 记录: ${err.message}`);
         return new Set();
     }
 }
 
 /**
  * 选择比赛题目，确保在难度区间内均匀分布
- * @param {Array} filteredProblems 已经预筛选（排除 AC 和 AHC）的候选题目列表
- * @param {number} count 需要选择的题目数量
- * @param {number} min 最低难度
- * @param {number} max 最高难度
+ * 
+ * @param {Array} filteredProblems - 候选题目列表
+ * @param {number} count - 需要选择的题目数量
+ * @param {number} min - 最低难度
+ * @param {number} max - 最高难度
  * @returns {Promise<Array>} 选择的题目列表
  */
 async function selectProblems(filteredProblems, count, min, max) {
     const result = [];
     const usedUrls = new Set();
 
-    logger.debug(`selectProblems: Selecting ${count} problems from ${filteredProblems.length} candidates in range [${min}, ${max}]`);
+    logger.debug(`selectProblems: 正在从 ${filteredProblems.length} 个候选题目中选择 ${count} 个题目，难度范围 [${min}, ${max}]`);
 
     for (let i = 0; i < count; i++) {
         // 计算目标难度，确保在 [min, max] 之间均匀分布
@@ -44,10 +46,10 @@ async function selectProblems(filteredProblems, count, min, max) {
             : (min + max) / 2;
 
         // 筛选尚未选用的题目
-        let candidates = filteredProblems.filter(p => !usedUrls.has(p.url));
+        const candidates = filteredProblems.filter(p => !usedUrls.has(p.url));
 
         if (candidates.length === 0) {
-            logger.error(`selectProblems: No available problems for index ${i}`);
+            logger.error(`selectProblems: 索引 ${i} 没有可用题目`);
             continue;
         }
 
@@ -66,7 +68,7 @@ async function selectProblems(filteredProblems, count, min, max) {
             score: 0 // 稍后统一设置
         });
 
-        logger.debug(`selectProblems: Selected "${selected.title}" (difficulty: ${selected.difficulty}, target: ${targetDiff.toFixed(0)})`);
+        logger.debug(`selectProblems: 已选择 "${selected.title}" (难度: ${selected.difficulty}, 目标: ${targetDiff.toFixed(0)})`);
     }
 
     // 最后按难度升序排列
@@ -74,40 +76,43 @@ async function selectProblems(filteredProblems, count, min, max) {
 }
 
 /**
- * 开始比赛的 API 处理函数
- * @param {object} ctx Koa 上下文
- * @param {function} next 下一个中间件
+ * 开始比赛接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
  */
-async function contest_start(ctx, next) {
-    const { room_id } = ctx.request.body;
+async function startContest(ctx) {
+    const { room_id: roomUrl } = ctx.request.body;
 
-    if (!room_id) {
-        ctx.status = 200;
-        ctx.body = { success: false, error: 'Invalid parameters' };
+    if (!roomUrl) {
+        ctx.status = 400;
+        ctx.body = { success: false, message: '房间 URL 不能为空' };
         return;
     }
 
-    logger.debug(`contest_start: Starting contest: Room ID ${room_id}`);
+    logger.debug(`contest_start: 正在为房间开始比赛: ${roomUrl}`);
 
     try {
-        const [row] = await pool.execute('SELECT * FROM room WHERE url =?', [room_id]);
-        if (row.length === 0) {
+        // 1. 获取房间信息
+        const [roomRows] = await pool.execute('SELECT * FROM room WHERE url = ? LIMIT 1', [roomUrl]);
+        if (roomRows.length === 0) {
             ctx.status = 404;
-            ctx.body = { success: false, error: 'Room does not exist' };
+            ctx.body = { success: false, message: '未找到该房间' };
             return;
         }
-        const room = row[0];
+        const roomData = roomRows[0];
 
-        // 获取房间成员
-        const [roomParticipants] = await pool.query(
-            `SELECT * FROM room_participants WHERE room_id = ?`,
-            [room.id]
+        // 2. 获取房间成员
+        const [roomParticipants] = await pool.execute(
+            'SELECT * FROM room_participants WHERE room_id = ?',
+            [roomData.id]
         );
 
         const team = { A: [], B: [] };
         const user = {};
         roomParticipants.forEach(p => {
-            team[p.team_label].push(p.username);
+            if (team[p.team_label]) {
+                team[p.team_label].push(p.username);
+            }
             user[p.username] = {
                 avatar: p.avatar,
                 place: p.place,
@@ -117,41 +122,41 @@ async function contest_start(ctx, next) {
 
         const allUsernames = [...team.A, ...team.B];
         if (allUsernames.length === 0) {
-            ctx.status = 403;
-            ctx.body = { success: false, error: 'No users in the room' };
+            ctx.status = 400;
+            ctx.body = { success: false, message: '房间内没有用户' };
             return;
         }
 
-        // 每次开始比赛前更新所有人的 AC 记录
-        logger.debug(`contest_start: Updating AC records for ${allUsernames.join(', ')}`);
+        // 3. 每次开始比赛前更新所有人的 AC 记录
+        logger.debug(`contest_start: 正在更新 ${allUsernames.length} 个用户的 AC 记录`);
         await Promise.allSettled(allUsernames.map(username => updateUserAC(username)));
 
-        if (allUsernames.some(name => !user[name] || !user[name].ready)) {
-            ctx.status = 403;
-            ctx.body = { success: false, error: 'Room is not ready' };
+        // 4. 检查是否所有人都准备好了
+        if (allUsernames.some(name => !user[name]?.ready)) {
+            ctx.status = 400;
+            ctx.body = { success: false, message: '所有玩家必须处于准备就绪状态' };
             return;
         }
 
         if (team.A.length === 0 || team.B.length === 0) {
-            ctx.status = 403;
-            ctx.body = { success: false, error: 'Team A or B has 0 members' };
+            ctx.status = 400;
+            ctx.body = { success: false, message: '两个队伍都必须至少有一名成员' };
             return;
         }
 
-        const id = room.id;
-        const url = room.url;
-        const master = room.master;
+        const contestId = roomData.id;
+        const master = roomData.master;
+        const maxRating = roomData.setting_rating_highest ?? 3000;
+        const minRating = roomData.setting_rating_lowest ?? 0;
+        const problemCount = roomData.setting_problem_count ?? 5;
+        const rated = !!roomData.rated;
 
-        const maxRating = room.setting_rating_highest ?? 3000;
-        const minRating = room.setting_rating_lowest ?? 0;
-        const problemCount = room.setting_problem_count ?? 5;
-        const rated = room.rated;
+        logger.debug(`contest_start: 正在选择 ${problemCount} 道题目 [${minRating}, ${maxRating}]`);
 
-        logger.debug(`contest_start: Fetching problems with difficulty between ${minRating} and ${maxRating}`);
-
-        // 获取所有符合条件的题目，并直接筛选掉 AHC 和房间内任何人已 AC 的题目
+        // 5. 获取符合条件的题目，排除 AHC 和已 AC 的题目
         const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minRating, maxRating]);
         const acceptedProblems = await getAcceptedProblems(allUsernames);
+
         const filteredProblems = allProblems.filter(p => {
             const isAHC = p.title.toLowerCase().includes('ahc');
             const taskId = p.url.split('/').pop();
@@ -159,95 +164,94 @@ async function contest_start(ctx, next) {
             return !isAHC && !isAccepted;
         });
 
-        logger.debug(`contest_start: Found ${allProblems.length} total problems, ${filteredProblems.length} after filtering AC and AHC`);
-
-        if (filteredProblems.length === 0) {
-            ctx.status = 200;
-            ctx.body = { success: false, error: 'No problems found in this difficulty range after filtering AC' };
+        if (filteredProblems.length < problemCount) {
+            ctx.status = 400;
+            ctx.body = { success: false, message: '在此难度范围内找不到足够的适用题目' };
             return;
         }
 
-        // 选择题目
+        // 6. 选择题目
         const selectedProblems = await selectProblems(filteredProblems, problemCount, minRating, maxRating);
 
-        if (selectedProblems.length === 0) {
-            ctx.status = 200;
-            ctx.body = { success: false, error: 'Failed to select any suitable problems' };
-            return;
-        }
-
         // 分配分数 (100, 200, 300...)
-        for (let i = 0; i < selectedProblems.length; i++) {
-            selectedProblems[i].score = (i + 1) * 100;
-        }
+        selectedProblems.forEach((p, index) => {
+            p.score = (index + 1) * 100;
+        });
 
         const startTime = new Date();
-        // 比赛开始时 endTime 为 NULL，表示进行中
-        const endTime = null;
+        const endTime = null; // 进行中
 
-        const conn = await pool.getConnection();
+        // 7. 开启事务创建比赛
+        let conn;
         try {
+            conn = await pool.getConnection();
             await conn.beginTransaction();
 
             // 1. 创建比赛主表记录
-            await conn.query(
+            await conn.execute(
                 'INSERT INTO contest (id, url, master, startTime, endTime, status, rated) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [id, url, master, startTime, endTime, 1, rated]
+                [contestId, roomUrl, master, startTime, endTime, 1, rated]
             );
 
             // 2. 创建题目记录
-            for (const p of selectedProblems) {
-                await conn.query(
+            const problemInsertions = selectedProblems.map(p =>
+                conn.execute(
                     'INSERT INTO contest_problems (contest_id, problem_id, title, url, score, status, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [id, p.id, p.title, p.url, p.score, 0, p.difficulty]
-                );
-            }
+                    [contestId, p.id, p.title, p.url, p.score, 0, p.difficulty]
+                )
+            );
+            await Promise.all(problemInsertions);
 
             // 3. 创建队伍和参与者记录
-            for (const username of team.A) {
-                await conn.query('INSERT INTO contest_teams (contest_id, team_label, username) VALUES (?, ?, ?)', [id, 'A', username]);
-                await conn.query(
-                    'INSERT INTO contest_participants (contest_id, username, score, place, avatar) VALUES (?, ?, ?, ?, ?)',
-                    [id, username, 0, user[username].place, user[username].avatar]
-                );
+            const teamAndParticipantInsertions = [];
+            for (const label of ['A', 'B']) {
+                for (const username of team[label]) {
+                    teamAndParticipantInsertions.push(
+                        conn.execute('INSERT INTO contest_teams (contest_id, team_label, username) VALUES (?, ?, ?)', [contestId, label, username]),
+                        conn.execute(
+                            'INSERT INTO contest_participants (contest_id, username, score, place, avatar) VALUES (?, ?, ?, ?, ?)',
+                            [contestId, username, 0, user[username].place, user[username].avatar]
+                        )
+                    );
+                }
             }
-            for (const username of team.B) {
-                await conn.query('INSERT INTO contest_teams (contest_id, team_label, username) VALUES (?, ?, ?)', [id, 'B', username]);
-                await conn.query(
-                    'INSERT INTO contest_participants (contest_id, username, score, place, avatar) VALUES (?, ?, ?, ?, ?)',
-                    [id, username, 0, user[username].place, user[username].avatar]
-                );
-            }
+            await Promise.all(teamAndParticipantInsertions);
 
             // 4. 删除房间和成员
-            await conn.execute('DELETE FROM room_participants WHERE room_id = ?', [id]);
-            await conn.execute('DELETE FROM room WHERE id = ?', [id]);
+            await conn.execute('DELETE FROM room_participants WHERE room_id = ?', [contestId]);
+            await conn.execute('DELETE FROM room WHERE id = ?', [contestId]);
 
             await conn.commit();
         } catch (err) {
-            await conn.rollback();
+            if (conn) await conn.rollback();
             throw err;
         } finally {
-            conn.release();
+            if (conn) conn.release();
         }
 
-        // 广播比赛开始通知
+        logger.info(`contest_start: 比赛 ${roomUrl} 已成功开始`);
+
+        // 8. 广播比赛开始通知
         ctx.app.emit('broadcast', {
             type: 'contest_start',
-            roomId: room_id,
-            contestId: id
+            roomId: roomUrl,
+            contestId: contestId
         });
 
         ctx.status = 200;
-        ctx.body = { success: true, data: { id, url, startTime, endTime, rated } };
+        ctx.body = {
+            success: true,
+            contestId: contestId,
+            data: { id: contestId, url: roomUrl, startTime, endTime, rated },
+            message: '比赛已开始'
+        };
     } catch (err) {
-        logger.error(`contest_start: Failed to start contest: ${err.message}`);
+        logger.error(`contest_start 错误: ${err.message}`);
         ctx.status = 500;
-        ctx.body = { success: false, error: 'Server Error' };
-        return;
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 
 export default {
-    'POST /contest_start': contest_start
+    'POST /contest_start': startContest
 }

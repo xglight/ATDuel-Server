@@ -1,28 +1,31 @@
-// user_contest.mjs
+// user_contestid.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
-async function user_contestid(ctx, next) {
-    const username = ctx.params.username;
+/**
+ * 获取用户参与的所有比赛 ID 接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function user_contestid(ctx) {
+    const { username } = ctx.params;
     if (!username) {
         ctx.status = 400;
-        ctx.body = { error: 'username is required' };
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
-    logger.info(`user_contestid: Fetching contest IDs for user ${username}`);
+
+    logger.info(`user_contestid: 正在获取用户 ${username} 参与的比赛 ID`);
     try {
         const [rows] = await pool.query('SELECT contest_id FROM contest_participants WHERE username = ?', [username]);
 
         const user_contest = rows.map(r => r.contest_id);
-        ctx.type = 'text/json';
         ctx.status = 200;
-        ctx.body = { user_contest };
+        ctx.body = { success: true, data: user_contest };
     } catch (err) {
-        logger.error(`user_contestid: Failed to fetch contest IDs for user ${username}: ${err.message}`);
+        logger.error(`user_contestid: 获取用户 ${username} 参与的比赛 ID 失败: ${err.message}`);
         ctx.status = 500;
-        ctx.type = 'text/plain';
-        ctx.body = 'Server Error';
-        return;
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 

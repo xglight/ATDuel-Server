@@ -1,58 +1,65 @@
 // check.mjs
 import * as cheerio from 'cheerio';
-import https from 'https';
+import axios from 'axios';
 import logger from '../logger.mjs';
 
-async function check(ctx, next) {
-    const username = ctx.params.username;
+/**
+ * 获取 AtCoder 用户所属机构接口
+ * 用于注册时验证用户身份（通过检查 AtCoder 个人主页的 Affiliation 字段）
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function check(ctx) {
+    const { username } = ctx.params;
 
     if (!username) {
         ctx.status = 400;
-        ctx.body = 'username is required';
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
 
-    const url = 'https://atcoder.jp/users/' + username;
+    const url = `https://atcoder.jp/users/${username}`;
+    logger.debug(`check: 正在获取 AtCoder 用户机构信息: ${username}`);
 
-    logger.debug('check: Registration token check: ', username);
-
-    ctx.type = 'text/plain';
     try {
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    resolve(data);
-                });
-            }).on('error', (error) => {
-                logger.error('check: ', error);
-                reject(error);
-            });
-        });
-
-        const $ = cheerio.load(data);
-        let affiliation = '';
-        $('#main-div #main-container div .dl-table tr').each((index, element) => {
-            if ($(element).find('th').text() === 'Affiliation') {
-                affiliation = $(element).find('td').text();
-                return false;
+        const response = await axios.get(url, {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         });
 
-        if (affiliation === '') {
+        const $ = cheerio.load(response.data);
+        let affiliation = '';
+
+        // 在用户信息表格中查找 Affiliation
+        $('.dl-table tr').each((_, element) => {
+            const label = $(element).find('th').text().trim();
+            if (label === 'Affiliation') {
+                affiliation = $(element).find('td').text().trim();
+                return false; // 找到后跳出循环
+            }
+        });
+
+        if (!affiliation) {
+            logger.debug(`check: 未找到用户 ${username} 的机构信息`);
             ctx.status = 404;
-            ctx.body = 'Not Found';
+            ctx.body = { success: false, message: '未找到机构信息' };
         } else {
+            logger.info(`check: 找到 ${username} 的机构信息: ${affiliation}`);
             ctx.status = 200;
-            ctx.body = affiliation;
+            ctx.body = { success: true, data: affiliation };
         }
     } catch (error) {
-        logger.error('check: ', error);
-        ctx.status = 500;
-        ctx.body = 'Server Error';
+        if (error.response && error.response.status === 404) {
+            logger.debug(`check: AtCoder 用户 ${username} 不存在`);
+            ctx.status = 404;
+            ctx.body = { success: false, message: 'AtCoder 用户不存在' };
+        } else {
+            logger.error(`check: 获取 ${username} 的 AtCoder 页面失败: ${error.message}`);
+            ctx.status = 500;
+            ctx.body = { success: false, message: '服务器内部错误' };
+        }
     }
 }
 

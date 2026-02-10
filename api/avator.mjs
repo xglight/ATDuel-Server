@@ -1,33 +1,39 @@
-// atavatar.mjs
+// avatar.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 
-async function avatar(ctx, next) {
-    const username = ctx.params.username;
+/**
+ * 获取用户头像路径接口
+ * 
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function getAvatar(ctx) {
+    const { username } = ctx.params;
     if (!username) {
         ctx.status = 400;
-        ctx.body = { error: 'username is required' };
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
-    ctx.type = "text/plain"
-    logger.debug('avatar: Requesting user avatar: ', username);
+
+    logger.debug(`avatar: 正在获取用户 ${username} 的头像路径`);
+
     try {
-        const [rows, fields] = await pool.query('SELECT * FROM user WHERE username = ?', [username]);
+        const [rows] = await pool.execute('SELECT avatar FROM user WHERE username = ?', [username]);
 
         if (rows.length === 0) {
             ctx.status = 404;
-            ctx.body = 'user not found';
+            ctx.body = { success: false, message: '未找到该用户' };
             return;
         }
+
         const avatarPath = rows[0].avatar;
         ctx.status = 200;
-        ctx.body = avatarPath;
+        ctx.body = { success: true, data: avatarPath || '' };
     } catch (err) {
-        logger.error('avatar: Processing error: ', err);
+        logger.error(`avatar 错误: ${err.message}`);
         ctx.status = 500;
-        ctx.body = 'Server Error';
-        return;
+        ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 
-export default { 'GET /avatar/:username': avatar };
+export default { 'GET /avatar/:username': getAvatar };
