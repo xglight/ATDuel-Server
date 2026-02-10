@@ -161,16 +161,13 @@ async function startContest(ctx) {
 
         const filteredProblems = allProblems.filter(p => {
             // 1. 排除 Heuristic 比赛 (AHC)
-            const contestType = p.contest.substring(0, 3).toUpperCase();
-            if (contestType === 'AHC') return false;
+            if (p.type === 'AHC') return false;
 
             // 2. 排除房间内任意成员已 AC 的题目
             if (acceptedProblems.has(p.problem_id)) return false;
 
-            // 3. 根据比赛类型确定类别 (ABC, ARC, AGC 或 Other)
-            const category = ['ABC', 'ARC', 'AGC'].includes(contestType) ? contestType : 'Other';
-
-            // 4. 检查该类别是否在房间允许的范围内
+            // 3. 检查该类别是否在房间允许的范围内 (ABC, ARC, AGC 或 Other)
+            const category = ['ABC', 'ARC', 'AGC'].includes(p.type) ? p.type : 'Other';
             return categories.includes(category);
         });
 
