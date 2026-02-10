@@ -1,13 +1,14 @@
 // room_update_setting.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import config from '../config.mjs';
 
 /**
  * 修改房间设置接口
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function updateRoomSetting(ctx) {
-    const { roomId: roomUrl, username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated } = ctx.request.body;
+    const { roomId: roomUrl, username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated, categories } = ctx.request.body;
 
     if (!roomUrl || !username || !token) {
         ctx.status = 400;
@@ -56,7 +57,52 @@ async function updateRoomSetting(ctx) {
             return;
         }
 
+        // 校验人数限制：修改后的房间总人数不能少于当前已在房间的人数
+        const [participantCountRows] = await conn.execute(
+            'SELECT COUNT(*) as count FROM room_participants WHERE room_id = ?',
+            [room.id]
+        );
+        const currentParticipantCount = participantCountRows[0].count;
+
+        // playerCount 格式通常为 "1v1", "2v2" 等，需要解析出总人数
+        const teamSize = parseInt(playerCount.split('v')[0]);
+        const targetMaxPlayers = teamSize * 2;
+
+        // 校验人数限制是否超过全局配置
+        if (teamSize > config.content.peopleLimit) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                message: `修改失败：目标模式 (${playerCount}) 超过了系统允许的最大人数 (${config.content.peopleLimit}v${config.content.peopleLimit})。`
+            };
+            await conn.rollback();
+            return;
+        }
+
+        if (currentParticipantCount > targetMaxPlayers) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                message: `修改失败：当前房间已有 ${currentParticipantCount} 人，目标模式 (${playerCount}) 最多容纳 ${targetMaxPlayers} 人。请先移除多余成员。`
+            };
+            await conn.rollback();
+            return;
+        }
+
         const now = new Date();
+
+        // 格式化 categories，确保是字符串
+        let categoriesStr = '';
+        if (Array.isArray(categories)) {
+            categoriesStr = categories.join(',');
+        } else if (typeof categories === 'string') {
+            categoriesStr = categories;
+        } else {
+            // 如果没传，保持原有设置或默认
+            const [oldRoom] = await conn.execute('SELECT setting_categories FROM room WHERE id = ?', [room.id]);
+            categoriesStr = oldRoom[0].setting_categories || config.content.categories;
+        }
+
         // 更新设置
         await conn.execute(
             `UPDATE room SET 
@@ -64,6 +110,7 @@ async function updateRoomSetting(ctx) {
                 setting_rating_lowest = ?, 
                 setting_rating_highest = ?, 
                 setting_problem_count = ?, 
+                setting_categories = ?,
                 rated = ?, 
                 last_updated = ? 
             WHERE id = ?`,
@@ -72,6 +119,7 @@ async function updateRoomSetting(ctx) {
                 difficultyMin,
                 difficultyMax,
                 problemCount,
+                categoriesStr,
                 isRated ? 1 : 0,
                 now,
                 room.id
@@ -81,16 +129,59 @@ async function updateRoomSetting(ctx) {
         await conn.commit();
         logger.info(`room_update_setting: 房主 ${username} 修改了房间 ${roomUrl} 的设置`);
 
-        // 广播更新通知
+        // 获取更新后的完整房间数据用于广播
+        const [updatedRoomRows] = await conn.execute(
+            'SELECT * FROM room WHERE id = ?',
+            [room.id]
+        );
+        const [participants] = await conn.execute(
+            'SELECT username, team_label, avatar, place, ready FROM room_participants WHERE room_id = ?',
+            [room.id]
+        );
+
+        const currentTeams = { A: [], B: [] };
+        const userMap = {};
+        participants.forEach(p => {
+            if (currentTeams[p.team_label]) {
+                currentTeams[p.team_label].push(p.username);
+            }
+            userMap[p.username] = {
+                avatar: p.avatar,
+                place: p.place,
+                ready: !!p.ready
+            };
+        });
+
+        const updatedRoom = updatedRoomRows[0];
+        const resultData = {
+            id: updatedRoom.id,
+            url: updatedRoom.url,
+            master: updatedRoom.master,
+            team: currentTeams,
+            user: userMap,
+            setting: {
+                mode: updatedRoom.setting_mode,
+                rating_lowest: updatedRoom.setting_rating_lowest,
+                rating_highest: updatedRoom.setting_rating_highest,
+                problem_count: updatedRoom.setting_problem_count,
+                categories: updatedRoom.setting_categories
+            },
+            rated: !!updatedRoom.rated,
+            last_updated: updatedRoom.last_updated
+        };
+
+        // 广播更新通知，包含完整数据以确保客户端同步
         ctx.app.emit('broadcast', {
             type: 'room_update',
             roomId: roomUrl,
-            last_updated: now
+            last_updated: now,
+            data: resultData
         });
 
         ctx.body = {
             success: true,
-            message: '房间设置已更新'
+            message: '房间设置已更新',
+            data: resultData
         };
 
     } catch (err) {

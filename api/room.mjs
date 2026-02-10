@@ -60,7 +60,8 @@ async function room(ctx) {
                 mode: roomData.setting_mode,
                 rating_lowest: roomData.setting_rating_lowest,
                 rating_highest: roomData.setting_rating_highest,
-                problem_count: roomData.setting_problem_count
+                problem_count: roomData.setting_problem_count,
+                categories: roomData.setting_categories
             },
             rated: roomData.rated,
             last_updated: roomData.last_updated

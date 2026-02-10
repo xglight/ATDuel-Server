@@ -280,6 +280,11 @@ async function main() {
                         logger.warn('ws: Invalid room chat message: ', data);
                         return;
                     }
+                    // 消息长度校验
+                    if (data.message.length > config.content.maxMessageLength) {
+                        logger.warn(`ws: Room chat message too long (${data.message.length}) from ${data.sender}`);
+                        return;
+                    }
                     logger.debug(`ws: Received room chat: ${data.message} User: ${data.sender} Room: ${data.roomId}`);
                     try {
                         // 存储消息
@@ -402,6 +407,11 @@ async function main() {
                     // 输入验证
                     if (!data.contestId || !data.sender || !data.message || !data.mode) {
                         logger.warn('ws: Invalid chat message: ', data);
+                        return;
+                    }
+                    // 消息长度校验
+                    if (data.message.length > config.content.maxMessageLength) {
+                        logger.warn(`ws: Contest chat message too long (${data.message.length}) from ${data.sender}`);
                         return;
                     }
                     logger.debug(`ws: Received chat message: ${data.message} User: ${data.sender} Mode: ${data.mode}`);

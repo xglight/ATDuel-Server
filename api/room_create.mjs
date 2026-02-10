@@ -25,7 +25,7 @@ function randomString(length) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function createRoom(ctx) {
-    const { username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated } = ctx.request.body;
+    const { username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated, categories } = ctx.request.body;
 
     // 参数验证
     if (!username || !token) {
@@ -52,20 +52,43 @@ async function createRoom(ctx) {
         const roomUrl = randomString(20);
         const now = new Date();
 
+        // 校验人数限制
+        const teamSize = parseInt((playerCount || '1v1').split(/v/i)[0]);
+        if (teamSize > config.content.peopleLimit) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                message: `创建失败：目标模式 (${playerCount}) 超过了系统允许的最大人数 (${config.content.peopleLimit}v${config.content.peopleLimit})。`
+            };
+            return;
+        }
+
+        // 格式化 categories，确保是字符串
+        let categoriesStr = '';
+        if (Array.isArray(categories)) {
+            categoriesStr = categories.join(',');
+        } else if (typeof categories === 'string') {
+            categoriesStr = categories;
+        } else {
+            // 默认使用配置中的类别
+            categoriesStr = config.content.categories;
+        }
+
         const roomData = {
             url: roomUrl,
             master: username,
             setting_mode: playerCount || '1v1',
-            setting_rating_lowest: difficultyMin !== undefined ? difficultyMin : -1500,
-            setting_rating_highest: difficultyMax !== undefined ? difficultyMax : 4400,
+            setting_rating_lowest: difficultyMin !== undefined ? difficultyMin : config.content.problemDifficultyLowerLimit,
+            setting_rating_highest: difficultyMax !== undefined ? difficultyMax : config.content.problemDifficultyUpperLimit,
             setting_problem_count: problemCount || config.content.problemCountLowerLimit,
+            setting_categories: categoriesStr,
             rated: isRated ? 1 : 0,
             last_updated: now
         };
 
         // 插入数据库
         await pool.execute(
-            'INSERT INTO room (url, master, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count, rated, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO room (url, master, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count, setting_categories, rated, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 roomData.url,
                 roomData.master,
@@ -73,6 +96,7 @@ async function createRoom(ctx) {
                 roomData.setting_rating_lowest,
                 roomData.setting_rating_highest,
                 roomData.setting_problem_count,
+                roomData.setting_categories,
                 roomData.rated,
                 roomData.last_updated
             ]

@@ -146,22 +146,32 @@ async function startContest(ctx) {
 
         const contestId = roomData.id;
         const master = roomData.master;
-        const maxDifficulty = roomData.setting_rating_highest ?? 4400;
-        const minDifficulty = roomData.setting_rating_lowest ?? -1500;
+        const maxDifficulty = roomData.setting_rating_highest ?? config.content.problemDifficultyUpperLimit;
+        const minDifficulty = roomData.setting_rating_lowest ?? config.content.problemDifficultyLowerLimit;
         const problemCount = roomData.setting_problem_count ?? 5;
+        const categoriesStr = roomData.setting_categories || config.content.categories;
+        const categories = categoriesStr.split(',');
         const rated = !!roomData.rated;
 
-        logger.debug(`contest_start: 正在选择 ${problemCount} 道题目 [${minDifficulty}, ${maxDifficulty}]`);
+        logger.debug(`contest_start: 正在选择 ${problemCount} 道题目 [${minDifficulty}, ${maxDifficulty}]，类别: ${categoriesStr}`);
 
-        // 5. 获取符合条件的题目，排除 AHC 和已 AC 的题目
+        // 5. 获取符合条件的题目，排除 AHC 和已 AC 的题目，并根据类别筛选
         const [allProblems] = await pool.execute('SELECT * FROM problem WHERE difficulty BETWEEN ? AND ?', [minDifficulty, maxDifficulty]);
         const acceptedProblems = await getAcceptedProblems(allUsernames);
 
         const filteredProblems = allProblems.filter(p => {
-            const isAHC = p.title.toLowerCase().includes('ahc');
-            const taskId = p.url.split('/').pop();
-            const isAccepted = acceptedProblems.has(taskId);
-            return !isAHC && !isAccepted;
+            // 1. 排除 Heuristic 比赛 (AHC)
+            const contestType = p.contest.substring(0, 3).toUpperCase();
+            if (contestType === 'AHC') return false;
+
+            // 2. 排除房间内任意成员已 AC 的题目
+            if (acceptedProblems.has(p.problem_id)) return false;
+
+            // 3. 根据比赛类型确定类别 (ABC, ARC, AGC 或 Other)
+            const category = ['ABC', 'ARC', 'AGC'].includes(contestType) ? contestType : 'Other';
+
+            // 4. 检查该类别是否在房间允许的范围内
+            return categories.includes(category);
         });
 
         if (filteredProblems.length < problemCount) {

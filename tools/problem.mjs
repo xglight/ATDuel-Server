@@ -33,6 +33,18 @@ async function getProblem(url) {
             if (difficulty == -10000) {
                 logger.warn(`Difficulty not found for problem ${id}, name ${name}, url ${problemurl}`);
             }
+
+            let type = 'Other';
+
+            if (name.includes('abc'))
+                type = 'ABC';
+            else if (name.includes('arc'))
+                type = 'ARC';
+            else if (name.includes('agc'))
+                type = 'AGC';
+            else
+                type = 'Other';
+
             const contest = problemurl.replace('https://atcoder.jp/contests/', '').split('/')[0];
             if (rows.length > 0) {
                 logger.info("Data already exists, updating difficulty and contest:", id, title, difficulty, contest);
@@ -42,8 +54,8 @@ async function getProblem(url) {
             logger.info("Inserting data:", id, name, difficulty, problemurl, title, contest);
             try {
                 await pool.execute(
-                    'INSERT INTO problem (id, problem_id, difficulty, url, title, contest) VALUES (?,?,?,?,?,?)'
-                    , [id, name, difficulty, problemurl, title, contest]);
+                    'INSERT INTO problem (id, problem_id, type, difficulty, url, title, contest) VALUES (?,?,?,?,?,?,?)'
+                    , [id, name, type, difficulty, problemurl, title, contest]);
             } catch (error) {
                 logger.error('Failed to insert data:', error);
             }

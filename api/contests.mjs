@@ -9,28 +9,42 @@ import logger from '../logger.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function contests(ctx) {
-    logger.debug('contests: 正在获取所有比赛列表');
+    const page = parseInt(ctx.query.page) || 1;
+    const limit = parseInt(ctx.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    logger.debug(`contests: 正在获取第 ${page} 页比赛列表 (limit: ${limit})`);
 
     try {
-        const [rows] = await pool.execute('SELECT * FROM contest');
+        // 获取总数
+        const [countRows] = await pool.execute('SELECT COUNT(*) as total FROM contest');
+        const total = countRows[0].total;
+
+        // 获取分页数据，按 ID 倒序排列（新比赛在前）
+        const [rows] = await pool.execute(
+            'SELECT * FROM contest ORDER BY status ASC, id DESC LIMIT ? OFFSET ?',
+            [limit.toString(), offset.toString()]
+        );
 
         if (rows.length === 0) {
             ctx.status = 200;
-            ctx.body = { success: true, data: [] };
+            ctx.body = { success: true, data: [], total: total };
             return;
         }
 
-        // 获取所有比赛的相关信息
+        const contestIds = rows.map(r => r.id);
+
+        // 获取当前分页比赛的相关信息
         const [
-            [allTeams],
-            [allParticipants],
-            [allProblems],
-            [allRatings]
+            allTeams,
+            allParticipants,
+            allProblems,
+            allRatings
         ] = await Promise.all([
-            pool.execute('SELECT * FROM contest_teams'),
-            pool.execute('SELECT * FROM contest_participants'),
-            pool.execute('SELECT * FROM contest_problems'),
-            pool.execute('SELECT * FROM contest_ratings')
+            pool.query('SELECT * FROM contest_teams WHERE contest_id IN (?)', [contestIds]).then(r => r[0]),
+            pool.query('SELECT * FROM contest_participants WHERE contest_id IN (?)', [contestIds]).then(r => r[0]),
+            pool.query('SELECT * FROM contest_problems WHERE contest_id IN (?)', [contestIds]).then(r => r[0]),
+            pool.query('SELECT * FROM contest_ratings WHERE contest_id IN (?)', [contestIds]).then(r => r[0])
         ]);
 
         // 建立映射
@@ -84,15 +98,8 @@ async function contests(ctx) {
             };
         });
 
-        // 排序规则：进行中优先，其次按 ID 倒序
-        const sortedRows = [...rows].sort((a, b) => {
-            if (a.status !== b.status) {
-                return a.status - b.status;
-            }
-            return b.id - a.id;
-        });
-
-        const result = sortedRows.map(row => ({
+        // 直接使用 rows，SQL 已经排好序了
+        const result = rows.map(row => ({
             id: row.id,
             url: row.url,
             startTime: row.startTime,
@@ -112,7 +119,8 @@ async function contests(ctx) {
         ctx.status = 200;
         ctx.body = {
             success: true,
-            data: result
+            data: result,
+            total: total
         };
     } catch (err) {
         logger.error(`contests 错误: ${err.message}`);

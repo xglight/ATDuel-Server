@@ -36,7 +36,7 @@ const SERVER_CONFIG = {
     protocol: getEnv('SERVER_PROTOCOL', 'http'),
     host: getEnv('SERVER_HOST', 'localhost'),
     port: getEnv('SERVER_PORT', 3000),
-    apiPrefix: '/api'
+    apiPrefix: getEnv('SERVER_API_PREFIX', '/api')
 };
 
 /**
@@ -75,7 +75,9 @@ const CONTENT_CONFIG = {
     problemCountUpperLimit: getEnv('CONTENT_PROBLEM_COUNT_UPPER_LIMIT', 10),
     problemDifficultyLowerLimit: getEnv('CONTENT_PROBLEM_DIFFICULTY_LOWER_LIMIT', -1500),
     problemDifficultyUpperLimit: getEnv('CONTENT_PROBLEM_DIFFICULTY_UPPER_LIMIT', 4400),
-    timeLimit: getEnv('CONTENT_TIME_LIMIT', 86400)
+    timeLimit: getEnv('CONTENT_TIME_LIMIT', 86400),
+    categories: getEnv('CONTENT_CATEGORIES', 'ABC,ARC,AGC,Other'),
+    maxMessageLength: getEnv('CONTENT_MAX_MESSAGE_LENGTH', 200)
 };
 
 /**

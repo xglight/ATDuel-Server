@@ -27,6 +27,7 @@ export const tableDefinitions = {
             problem_id VARCHAR(255) NOT NULL,
             title VARCHAR(255) NOT NULL,
             contest VARCHAR(255) NOT NULL,
+            type VARCHAR(50) NOT NULL,
             url VARCHAR(255) NOT NULL,
             difficulty INT NOT NULL
         )`,
@@ -113,6 +114,7 @@ export const tableDefinitions = {
             setting_rating_lowest INT,
             setting_rating_highest INT,
             setting_problem_count INT,
+            setting_categories VARCHAR(255),
             rated BOOLEAN DEFAULT false,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )`,

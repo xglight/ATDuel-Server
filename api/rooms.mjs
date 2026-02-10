@@ -9,17 +9,36 @@ import logger from '../logger.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function rooms(ctx) {
-    logger.debug('rooms: 正在获取所有房间列表');
+    const page = parseInt(ctx.query.page) || 1;
+    const limit = parseInt(ctx.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    logger.debug(`rooms: 正在获取第 ${page} 页房间列表 (limit: ${limit})`);
 
     try {
-        // 获取所有房间和所有房间的成员
-        const [
-            [rows],
-            [allParticipants]
-        ] = await Promise.all([
-            pool.execute('SELECT * FROM room'),
-            pool.execute('SELECT * FROM room_participants')
-        ]);
+        // 获取总数
+        const [countRows] = await pool.execute('SELECT COUNT(*) as total FROM room');
+        const total = countRows[0].total;
+
+        // 获取分页房间
+        const [rows] = await pool.execute(
+            'SELECT * FROM room ORDER BY id DESC LIMIT ? OFFSET ?',
+            [limit.toString(), offset.toString()]
+        );
+
+        if (rows.length === 0) {
+            ctx.status = 200;
+            ctx.body = { success: true, data: [], total: total };
+            return;
+        }
+
+        const roomIds = rows.map(r => r.id);
+
+        // 获取这些房间的成员
+        const [allParticipants] = await pool.query(
+            'SELECT * FROM room_participants WHERE room_id IN (?)',
+            [roomIds]
+        );
 
         // 按 room_id 分组参与者
         const participantsMap = {};
@@ -57,7 +76,8 @@ async function rooms(ctx) {
                     mode: row.setting_mode,
                     rating_lowest: row.setting_rating_lowest,
                     rating_highest: row.setting_rating_highest,
-                    problem_count: row.setting_problem_count
+                    problem_count: row.setting_problem_count,
+                    categories: row.setting_categories
                 },
                 rated: row.rated
             };
@@ -68,7 +88,8 @@ async function rooms(ctx) {
         ctx.status = 200;
         ctx.body = {
             success: true,
-            data: result
+            data: result,
+            total: total
         };
     } catch (err) {
         logger.error(`rooms 错误: ${err.message}`);
