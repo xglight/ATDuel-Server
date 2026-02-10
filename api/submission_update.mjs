@@ -4,6 +4,10 @@ import pool from '../db.mjs';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
 
+// 判题冷却时间管理 (内存存储)
+const lastJudgedTimes = new Map();
+const JUDGE_COOLDOWN = 10000; // 10 秒冷却时间
+
 /**
  * 处理队伍成员的提交记录
  * 
@@ -98,6 +102,20 @@ async function submission_update(ctx) {
         }
 
         const contest = contestRows[0];
+
+        // 判题冷却时间检查
+        const cooldownKey = `${contestId}:${username}`;
+        const now = Date.now();
+        const lastTime = lastJudgedTimes.get(cooldownKey) || 0;
+        if (now - lastTime < JUDGE_COOLDOWN) {
+            const remaining = Math.ceil((JUDGE_COOLDOWN - (now - lastTime)) / 1000);
+            ctx.status = 200;
+            ctx.body = { success: false, message: `操作过快，请在 ${remaining} 秒后重试` };
+            return;
+        }
+
+        // 更新冷却时间
+        lastJudgedTimes.set(cooldownKey, now);
 
         // 如果比赛已经结束，只同步提交记录，不更新分数
         const isContestEnded = contest.status === 2;

@@ -38,7 +38,7 @@ async function roomReady(ctx) {
         }
 
         // 获取房间数据并加锁
-        const [roomRows] = await conn.execute('SELECT id, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count, setting_categories, rated FROM room WHERE url = ? FOR UPDATE', [roomUrl]);
+        const [roomRows] = await conn.execute('SELECT id, url, master, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count, setting_categories, rated FROM room WHERE url = ? FOR UPDATE', [roomUrl]);
         if (roomRows.length === 0) {
             ctx.status = 404;
             ctx.body = { success: false, message: '未找到该房间' };
@@ -101,6 +101,9 @@ async function roomReady(ctx) {
         });
 
         const result = {
+            id: roomData.id,
+            url: roomData.url,
+            master: roomData.master,
             team: currentTeams,
             user: userMap,
             setting: {
