@@ -46,37 +46,38 @@ async function contest_ac(ctx) {
         const userTeam = teams.find(t => t.username === username);
 
         if (problemToUpdate && userTeam) {
-            if (userTeam.team_label === 'A') {
-                scorea += problemToUpdate.score;
-            } else {
-                scoreb += problemToUpdate.score;
-            }
-
             let conn;
             try {
                 conn = await pool.getConnection();
                 await conn.beginTransaction();
 
-                // 1. 更新参与者分数
-                await conn.execute(
-                    'UPDATE contest_participants SET score = score + ? WHERE contest_id = ? AND username = ?',
-                    [problemToUpdate.score, contest.id, username]
-                );
-
-                // 2. 更新题目状态
-                await conn.execute(
-                    'UPDATE contest_problems SET status = 1, acuser = ? WHERE contest_id = ? AND problem_id = ?',
+                // 1. 尝试更新题目状态（增加 status = 0 条件防止重复更新）
+                const [updateProblemRes] = await conn.execute(
+                    'UPDATE contest_problems SET status = 1, acuser = ? WHERE contest_id = ? AND problem_id = ? AND status = 0',
                     [username, contest.id, problemToUpdate.problem_id]
                 );
 
-                // 3. 更新比赛总分
-                await conn.execute(
-                    'UPDATE contest SET scorea = ?, scoreb = ? WHERE id = ?',
-                    [scorea, scoreb, contest.id]
-                );
+                // 只有当本次请求成功将状态从 0 改为 1 时，才进行分数增加
+                if (updateProblemRes.affectedRows > 0) {
+                    // 2. 更新参与者分数
+                    await conn.execute(
+                        'UPDATE contest_participants SET score = score + ? WHERE contest_id = ? AND username = ?',
+                        [problemToUpdate.score, contest.id, username]
+                    );
 
-                await conn.commit();
-                updated = true;
+                    // 3. 更新比赛总分
+                    const scoreField = userTeam.team_label === 'A' ? 'scorea' : 'scoreb';
+                    await conn.execute(
+                        `UPDATE contest SET ${scoreField} = ${scoreField} + ? WHERE id = ?`,
+                        [problemToUpdate.score, contest.id]
+                    );
+
+                    await conn.commit();
+                    updated = true;
+                } else {
+                    await conn.rollback();
+                    updated = false;
+                }
             } catch (err) {
                 if (conn) await conn.rollback();
                 throw err;
@@ -86,10 +87,16 @@ async function contest_ac(ctx) {
         }
 
         if (updated) {
-            // 广播分数更新
+            // 广播分数更新和题目状态更新
             ctx.app.emit('broadcast', {
                 type: 'contest_update',
-                contestId: contestId
+                contestId: contestId,
+                action: 'score_updated',
+                data: {
+                    problemTitle: title,
+                    status: 1,
+                    acuser: username
+                }
             });
 
             ctx.status = 200;
