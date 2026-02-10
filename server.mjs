@@ -41,6 +41,32 @@ async function storeMessage(type, contestId, teamId, sender, message, mode) {
 }
 
 /**
+ * 存储房间消息到数据库
+ * @param {string} roomUrl 房间URL
+ * @param {string} sender 发送者
+ * @param {string} message 消息内容
+ */
+async function storeRoomMessage(roomUrl, sender, message) {
+    await pool.query(
+        'INSERT INTO room_messages (room_url, sender, message) VALUES (?,?,?)',
+        [roomUrl, sender, message]
+    );
+}
+
+/**
+ * 获取房间历史消息
+ * @param {string} roomUrl 房间URL
+ * @returns {Promise<Array>} 历史消息列表
+ */
+async function getRoomMessages(roomUrl) {
+    const [rows] = await pool.query(
+        'SELECT sender, message, timestamp FROM room_messages WHERE room_url = ? ORDER BY timestamp ASC LIMIT 100',
+        [roomUrl]
+    );
+    return rows;
+}
+
+/**
  * 获取房间历史消息
  * @param {string} contestId 比赛ID
  * @returns {Promise<Array|null>} 历史消息列表
@@ -233,6 +259,47 @@ async function main() {
                     roomClients.get(roomId).add(ws);
                     logger.debug(`ws: Client ${ws._socket.remoteAddress} joined room ${roomId}`);
                     ws.roomId = roomId;
+
+                    // 发送历史消息
+                    try {
+                        const history = await getRoomMessages(roomId);
+                        if (history && history.length > 0) {
+                            history.forEach(msg => {
+                                ws.send(JSON.stringify({
+                                    type: 'room_chat',
+                                    roomId: roomId,
+                                    sender: msg.sender,
+                                    message: msg.message,
+                                    timestamp: msg.timestamp
+                                }));
+                            });
+                        }
+                    } catch (error) {
+                        logger.error('ws: Failed to fetch room history: ', error);
+                    }
+                }
+                else if (data.type === 'room_chat') {
+                    // 房间聊天处理
+                    if (!data.roomId || !data.sender || !data.message) {
+                        logger.warn('ws: Invalid room chat message: ', data);
+                        return;
+                    }
+                    logger.debug(`ws: Received room chat: ${data.message} User: ${data.sender} Room: ${data.roomId}`);
+                    try {
+                        // 存储消息
+                        await storeRoomMessage(data.roomId, data.sender, data.message);
+
+                        // 广播给房间所有人
+                        broadcastToRoom(data.roomId, {
+                            type: 'room_chat',
+                            roomId: data.roomId,
+                            sender: data.sender,
+                            message: data.message,
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (error) {
+                        logger.error('ws: Failed to process room chat: ', error);
+                    }
                 }
                 else if (data.type === 'join_contest' && data.contestId) {
                     // 加入比赛

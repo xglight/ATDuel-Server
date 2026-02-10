@@ -128,6 +128,15 @@ export const tableDefinitions = {
             INDEX idx_room_id (room_id),
             INDEX idx_username (username)
         )`,
+    room_messages: `
+        CREATE TABLE IF NOT EXISTS room_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            room_url VARCHAR(255) NOT NULL,
+            sender VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_room_url (room_url)
+        )`,
     contest_messages: `
         CREATE TABLE IF NOT EXISTS contest_messages (
             id SERIAL PRIMARY KEY,
