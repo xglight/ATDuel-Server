@@ -2,6 +2,8 @@
 
 ATDuel-Server 是 ATDuel 平台的后端核心。基于 Node.js 开发，它负责处理业务逻辑、数据持久化、AtCoder 数据同步、实时通信以及比赛状态管理。
 
+前段在这里：[ATDuel-Client](https://github.com/xglight/ATDuel-Client)
+
 [![Node.js](https://img.shields.io/badge/node-v22.13.1-blue)](https://nodejs.org/)
 [![npm](https://img.shields.io/badge/npm-v11.1.0-blue)](https://www.npmjs.com/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
