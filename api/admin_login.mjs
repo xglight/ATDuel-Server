@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
 import pool from '../db.mjs';
@@ -8,11 +9,11 @@ import pool from '../db.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function adminLogin(ctx) {
-    const { username, password, token } = ctx.request.body;
+    const { username, password } = ctx.request.body;
 
-    if (!password || !token) {
+    if (!password) {
         ctx.status = 400;
-        ctx.body = { success: false, message: '密码和 Token 不能为空' };
+        ctx.body = { success: false, message: '密码不能为空' };
         return;
     }
 
@@ -37,11 +38,17 @@ async function adminLogin(ctx) {
 
         if (match) {
             logger.info(`管理员登录成功: ${loginUsername}`);
+
+            // 生成服务器端 Token
+            const token = crypto.randomBytes(32).toString('hex');
+
             try {
+                // 记录管理员登录状态，支持更新 Token
+                // 注意：admin_status 表的字段是 username, token, loginTime
                 await pool.execute(
-                    `INSERT INTO admin_status (token, loginTime) VALUES (?, CURRENT_TIMESTAMP) 
-                     ON DUPLICATE KEY UPDATE loginTime = CURRENT_TIMESTAMP`,
-                    [token]
+                    `INSERT INTO admin_status (username, token, loginTime) VALUES (?, ?, CURRENT_TIMESTAMP) 
+                     ON DUPLICATE KEY UPDATE token = VALUES(token), loginTime = CURRENT_TIMESTAMP`,
+                    [loginUsername, token]
                 );
             } catch (err) {
                 logger.error(`admin_login: 数据库操作失败: ${err.message}`);
@@ -49,6 +56,15 @@ async function adminLogin(ctx) {
                 ctx.body = { success: false, message: '数据库错误' };
                 return;
             }
+
+            // 设置 HttpOnly Cookie
+            ctx.cookies.set('admin_token', token, {
+                maxAge: 24 * 60 * 60 * 1000,
+                httpOnly: true,
+                path: '/',
+                overwrite: true
+            });
+
             ctx.status = 200;
             ctx.body = { success: true, message: '登录成功' };
         } else {

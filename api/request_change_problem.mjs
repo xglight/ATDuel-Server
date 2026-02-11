@@ -3,6 +3,7 @@ import pool from '../db.mjs';
 import logger from '../logger.mjs';
 import requestStore from '../tools/change_request_store.mjs';
 import { v4 as uuidv4 } from 'uuid';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 发起换题请求
@@ -10,9 +11,9 @@ import { v4 as uuidv4 } from 'uuid';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function requestChangeProblem(ctx) {
-    const { contestId, problemId, username, token } = ctx.request.body;
+    const { contestId, problemId } = ctx.request.body;
 
-    if (!contestId || !problemId || !username || !token) {
+    if (!contestId || !problemId) {
         ctx.status = 400;
         ctx.body = { success: false, message: '参数无效' };
         return;
@@ -20,16 +21,15 @@ async function requestChangeProblem(ctx) {
 
     try {
         // 校验 Token
-        const [loginRows] = await pool.execute(
-            'SELECT username FROM login_status WHERE username = ? AND token = ?',
-            [username, token]
-        );
-
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`request_change_problem: 用户 ${username} 正在请求更换比赛 ${contestId} 的题目 ${problemId}`);
 
         // 检查比赛是否存在
         const [contestRows] = await pool.execute(

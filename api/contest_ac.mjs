@@ -1,6 +1,7 @@
 // contest_ac.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 更新比赛 AC 状态 API 处理函数
@@ -10,12 +11,22 @@ import logger from '../logger.mjs';
 async function contest_ac(ctx) {
     try {
         // 参数校验
-        const { contestId, username, title } = ctx.request.body;
-        if (!contestId || !username || !title) {
+        const { contestId, title } = ctx.request.body;
+        if (!contestId || !title) {
             ctx.status = 400;
-            ctx.body = { success: false, message: 'contestId, username, title 均不能为空' };
+            ctx.body = { success: false, message: 'contestId, title 均不能为空' };
             return;
         }
+
+        // 校验 Token
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
+            ctx.status = 401;
+            ctx.body = { success: false, message: '未登录或已过期' };
+            return;
+        }
+
+        const username = authResult.username;
 
         // 查询比赛
         const [rows] = await pool.execute(

@@ -10,17 +10,11 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function getUsers(ctx) {
-    const { token, query } = ctx.request.body;
-
-    if (!token) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: '管理员 Token 不能为空' };
-        return;
-    }
+    const { query } = ctx.request.body;
 
     try {
         // 1. 验证管理员权限
-        const isAdmin = await verifyAdmin(token);
+        const isAdmin = await verifyAdmin(ctx);
         if (!isAdmin) {
             ctx.status = 403;
             ctx.body = { success: false, message: '未授权：需要管理员权限' };
@@ -75,17 +69,17 @@ async function getUsers(ctx) {
  * @returns {Promise<void>}
  */
 async function getUserDetail(ctx) {
-    const { token, userId, username } = ctx.request.body;
+    const { userId, username } = ctx.request.body;
 
-    if (!token || (!userId && !username)) {
+    if (!userId && !username) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'Admin token and (userId or username) are required' };
+        ctx.body = { success: false, message: 'userId or username is required' };
         return;
     }
 
     try {
         // 1. 验证管理员权限
-        const isAdmin = await verifyAdmin(token);
+        const isAdmin = await verifyAdmin(ctx);
         if (!isAdmin) {
             ctx.status = 403;
             ctx.body = { success: false, message: 'Unauthorized: Admin access required' };

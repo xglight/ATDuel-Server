@@ -8,14 +8,14 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function banUser(ctx) {
-    const { username, reason, endBanTime, token } = ctx.request.body;
-    if (!username || !endBanTime || !token) {
+    const { username, reason, endBanTime } = ctx.request.body;
+    if (!username || !endBanTime) {
         ctx.status = 400;
-        ctx.body = { success: false, message: '用户名、封禁截止时间和 Token 均不能为空' };
+        ctx.body = { success: false, message: '用户名和封禁截止时间均不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;

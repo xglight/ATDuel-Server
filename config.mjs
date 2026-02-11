@@ -77,7 +77,8 @@ const CONTENT_CONFIG = {
     problemDifficultyUpperLimit: getEnv('CONTENT_PROBLEM_DIFFICULTY_UPPER_LIMIT', 4400),
     timeLimit: getEnv('CONTENT_TIME_LIMIT', 86400),
     categories: getEnv('CONTENT_CATEGORIES', 'ABC,ARC,AGC,Other'),
-    maxMessageLength: getEnv('CONTENT_MAX_MESSAGE_LENGTH', 200)
+    maxMessageLength: getEnv('CONTENT_MAX_MESSAGE_LENGTH', 200),
+    chatRateLimit: getEnv('CONTENT_CHAT_RATE_LIMIT', 3000)
 };
 
 /**
@@ -85,11 +86,19 @@ const CONTENT_CONFIG = {
  */
 const LOG_LEVEL = getEnv('LOG_LEVEL', 'info');
 
+/**
+ * Eden AI 配置
+ */
+const EDEN_AI_CONFIG = {
+    apiKey: getEnv('EDEN_AI_API_KEY', '')
+};
+
 export default {
     server: SERVER_CONFIG,
     mysql: MYSQL_CONFIG,
     register: REGISTER_CONFIG,
     content: CONTENT_CONFIG,
+    edenAI: EDEN_AI_CONFIG,
     logLevel: LOG_LEVEL,
     buildApiUrl
 };

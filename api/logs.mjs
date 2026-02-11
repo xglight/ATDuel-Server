@@ -42,15 +42,9 @@ const getLatestLogFile = () => {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function getLogs(ctx) {
-    const { token, date } = ctx.request.body;
+    const { date } = ctx.request.body;
 
-    if (!token) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: 'Token 不能为空' };
-        return;
-    }
-
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;
@@ -100,6 +94,56 @@ async function getLogs(ctx) {
     }
 }
 
+/**
+ * 清空日志接口处理函数
+ *
+ * @param {import('koa').Context} ctx - Koa 上下文
+ */
+async function clearLogs(ctx) {
+    if (!(await verifyAdmin(ctx))) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '管理员权限校验失败' };
+        return;
+    }
+
+    try {
+        if (!fs.existsSync(logDir)) {
+            ctx.status = 200;
+            ctx.body = { success: true, message: '日志目录不存在，无需清空' };
+            return;
+        }
+
+        const files = fs.readdirSync(logDir);
+        const logFiles = files.filter(file => file.endsWith('.log'));
+
+        for (const file of logFiles) {
+            const filePath = path.join(logDir, file);
+            // 对于当前正在使用的日志文件，可以尝试清空而不是删除，或者忽略
+            // 这里选择直接删除所有 .log 文件，如果文件被占用可能会报错
+            try {
+                fs.unlinkSync(filePath);
+            } catch (e) {
+                logger.warn(`clearLogs: 无法删除日志文件 ${file}: ${e.message}`);
+                // 如果删除失败，尝试清空内容
+                try {
+                    fs.writeFileSync(filePath, '');
+                } catch (e2) {
+                    logger.error(`clearLogs: 无法清空日志文件 ${file}: ${e2.message}`);
+                }
+            }
+        }
+
+        logger.info('clearLogs: 管理员清空了所有日志文件');
+        ctx.status = 200;
+        ctx.body = { success: true, message: '日志已成功清空' };
+    } catch (err) {
+        logger.error(`clearLogs: 清空日志时发生错误: ${err.message}`);
+        ctx.status = 500;
+        ctx.body = { success: false, message: '服务器内部错误' };
+    }
+}
+
 export default {
     'POST /admin/logs': getLogs,
+    'POST /admin/logs_clear': clearLogs
 };

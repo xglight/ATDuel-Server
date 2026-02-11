@@ -3,6 +3,7 @@ import pool from '../db.mjs';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
 import { updateUserAC } from './user_ac_update.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 获取房间内所有人 AC 过的题目集合
@@ -89,7 +90,16 @@ async function startContest(ctx) {
         return;
     }
 
-    logger.debug(`contest_start: 正在为房间开始比赛: ${roomUrl}`);
+    // 校验 Token
+    const authResult = await verifyUser(ctx);
+    if (!authResult.success) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '未登录或已过期' };
+        return;
+    }
+
+    const username = authResult.username;
+    logger.debug(`contest_start: 用户 ${username} 正在为房间开始比赛: ${roomUrl}`);
 
     try {
         // 1. 获取房间信息

@@ -4,6 +4,7 @@ import logger from '../logger.mjs';
 import actionStore from '../tools/contest_action_store.mjs';
 import { finalizeContest } from './contest_final.mjs';
 import { v4 as uuidv4 } from 'uuid';
+import { verifyUser } from '../utils/auth.mjs';
 
 // 内存存储冷却时间: username -> lastRequestTimestamp
 const cooldowns = new Map();
@@ -14,9 +15,9 @@ const cooldowns = new Map();
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function requestContestAction(ctx) {
-    const { contestId, type, username, token } = ctx.request.body;
+    const { contestId, type } = ctx.request.body;
 
-    if (!contestId || !['draw', 'surrender'].includes(type) || !username || !token) {
+    if (!contestId || !['draw', 'surrender'].includes(type)) {
         ctx.status = 400;
         ctx.body = { success: false, message: '参数无效' };
         return;
@@ -24,12 +25,15 @@ async function requestContestAction(ctx) {
 
     try {
         // 校验 Token
-        const [loginRows] = await pool.execute('SELECT 1 FROM login_status WHERE username = ? AND token = ? LIMIT 1', [username, token]);
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`contest_action: 用户 ${username} 请求 ${type}, 比赛 ID: ${contestId}`);
 
         // 检查冷却时间 (1分钟)
         const now = Date.now();
@@ -196,9 +200,9 @@ async function requestContestAction(ctx) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function voteContestAction(ctx) {
-    const { contestId, requestId, action, username, token } = ctx.request.body;
+    const { contestId, requestId, action } = ctx.request.body;
 
-    if (!contestId || !requestId || !action || !username || !token) {
+    if (!contestId || !requestId || !action) {
         ctx.status = 400;
         ctx.body = { success: false, message: '参数无效' };
         return;
@@ -206,12 +210,15 @@ async function voteContestAction(ctx) {
 
     try {
         // 校验 Token
-        const [loginRows] = await pool.execute('SELECT 1 FROM login_status WHERE username = ? AND token = ? LIMIT 1', [username, token]);
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`contest_action: 用户 ${username} 投票 ${action}, 请求 ID: ${requestId}`);
 
         const ongoingAction = actionStore.get(contestId);
         if (!ongoingAction || ongoingAction.requestId !== requestId) {

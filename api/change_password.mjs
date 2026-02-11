@@ -1,6 +1,7 @@
 import pool from '../db.mjs';
 import bcrypt from 'bcrypt';
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 修改用户密码接口
@@ -9,31 +10,28 @@ import logger from '../logger.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function changePassword(ctx) {
-    const { username, token, oldPassword, newPassword } = ctx.request.body;
+    const { oldPassword, newPassword } = ctx.request.body;
 
-    if (!username || !token || !oldPassword || !newPassword) {
+    if (!oldPassword || !newPassword) {
         ctx.status = 400;
         ctx.body = {
             success: false,
-            message: '用户名、Token、当前密码和新密码均不能为空'
+            message: '当前密码和新密码均不能为空'
         };
         return;
     }
 
-    logger.debug(`change_password: 用户 ${username} 正在尝试修改密码`);
-
     try {
         // 1. 验证登录状态
-        const [statusRows] = await pool.execute(
-            'SELECT username FROM login_status WHERE username = ? AND token = ? LIMIT 1',
-            [username, token]
-        );
-
-        if (statusRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`change_password: 用户 ${username} 正在尝试修改密码`);
 
         // 2. 解码 Base64 密码并验证旧密码
         const decodedOldPassword = Buffer.from(oldPassword, 'base64').toString();

@@ -100,7 +100,7 @@ export const tableDefinitions = {
     login_status: `
         CREATE TABLE IF NOT EXISTS login_status (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(255) NOT NULL,
+            username VARCHAR(255) NOT NULL UNIQUE,
             token VARCHAR(255) NOT NULL,
             loginTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             rememberMe TINYINT DEFAULT 0
@@ -169,6 +169,7 @@ export const tableDefinitions = {
     admin_status: `
         CREATE TABLE IF NOT EXISTS admin_status (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) NOT NULL UNIQUE,
             token VARCHAR(255) NOT NULL,
             loginTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`,
@@ -186,5 +187,12 @@ export const tableDefinitions = {
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )`,
+    global_messages: `
+        CREATE TABLE IF NOT EXISTS global_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sender VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`
 };

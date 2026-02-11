@@ -1,5 +1,6 @@
 // user_submissions.mjs
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 import * as cheerio from 'cheerio';
 
 // 全局请求队列，用于限制对 AtCoder 的请求频率
@@ -53,10 +54,20 @@ function toOffsetString(date, offsetMinutes) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function getUserSubmissions(ctx) {
-    const { username, problem_id, startTime, contest: contestName } = ctx.request.body;
+    const { problem_id, startTime, contest: contestName } = ctx.request.body;
     let { status } = ctx.request.body;
 
-    if (!username || !problem_id || !startTime) {
+    // 校验 Token
+    const authResult = await verifyUser(ctx);
+    if (!authResult.success) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '未登录或已过期' };
+        return;
+    }
+
+    const username = authResult.username;
+
+    if (!problem_id || !startTime) {
         ctx.status = 400;
         ctx.body = { success: false, message: '参数无效，用户名、题目 ID 和开始时间均为必填' };
         return;
@@ -107,10 +118,20 @@ async function getUserSubmissions(ctx) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function getUserSubmissions2(ctx) {
-    const { username, problem_id, startTime, contest: contestName } = ctx.request.body;
+    const { problem_id, startTime, contest: contestName } = ctx.request.body;
     let { status } = ctx.request.body;
 
-    if (!username || !problem_id || !startTime) {
+    // 校验 Token
+    const authResult = await verifyUser(ctx);
+    if (!authResult.success) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '未登录或已过期' };
+        return;
+    }
+
+    const username = authResult.username;
+
+    if (!problem_id || !startTime) {
         ctx.status = 400;
         ctx.body = { success: false, message: '参数无效，用户名、题目 ID 和开始时间均为必填' };
         return;

@@ -14,6 +14,8 @@ import clientRoutes from '../ATDuel-Client/source/load.mjs';
 import requestStore from './tools/change_request_store.mjs';
 import { finalizeContest } from './api/contest_final.mjs';
 import actionStore from './tools/contest_action_store.mjs';
+import { verifyUser } from './utils/auth.mjs';
+import { moderateText } from './utils/moderation.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = new Koa();
@@ -23,6 +25,57 @@ const port = config.server.port;
 const wss = new WebSocketServer({ noServer: true });
 const roomClients = new Map(); // roomId -> Set of clients
 const contestClients = new Map(); // contestId -> Set of clients
+const globalClients = new Set(); // Global chat clients
+const lastMessageTime = new Map(); // username -> timestamp
+
+/**
+ * 解析 Cookie 字符串
+ * @param {string} cookieStr Cookie 字符串
+ * @returns {object} 解析后的 Cookie 对象
+ */
+function parseCookies(cookieStr) {
+    const cookies = {};
+    if (!cookieStr) return cookies;
+    cookieStr.split(';').forEach(cookie => {
+        const parts = cookie.split('=');
+        if (parts.length === 2) {
+            cookies[parts[0].trim()] = parts[1].trim();
+        }
+    });
+    return cookies;
+}
+
+/**
+ * 转义 HTML 字符以防止 XSS 攻击
+ * @param {string} str 需要转义的字符串
+ * @returns {string} 转义后的字符串
+ */
+function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * 检查用户是否发送消息过快
+ * @param {string} username 用户名
+ * @returns {boolean} 是否允许发送
+ */
+function checkRateLimit(username) {
+    const now = Date.now();
+    const lastTime = lastMessageTime.get(username) || 0;
+    const interval = config.content.chatRateLimit; // 使用配置中的限制
+
+    if (now - lastTime < interval) {
+        return false;
+    }
+    lastMessageTime.set(username, now);
+    return true;
+}
 
 /**
  * 存储消息到数据库
@@ -51,6 +104,29 @@ async function storeRoomMessage(roomUrl, sender, message) {
         'INSERT INTO room_messages (room_url, sender, message) VALUES (?,?,?)',
         [roomUrl, sender, message]
     );
+}
+
+/**
+ * 存储全局消息到数据库
+ * @param {string} sender 发送者
+ * @param {string} message 消息内容
+ */
+async function storeGlobalMessage(sender, message) {
+    await pool.query(
+        'INSERT INTO global_messages (sender, message) VALUES (?,?)',
+        [sender, message]
+    );
+}
+
+/**
+ * 获取全局历史消息
+ * @returns {Promise<Array>} 历史消息列表
+ */
+async function getGlobalMessages() {
+    const [rows] = await pool.query(
+        'SELECT sender, message, timestamp FROM global_messages ORDER BY timestamp ASC LIMIT 100'
+    );
+    return rows;
 }
 
 /**
@@ -149,15 +225,41 @@ function broadcastToContest(contestId, message, targetTeam = null) {
 }
 
 /**
+ * 广播消息给所有连接到主页的客户端
+ * @param {object} message 要广播的消息对象
+ */
+function broadcastToGlobal(message) {
+    const data = JSON.stringify(message);
+    globalClients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            try {
+                client.send(data, (err) => {
+                    if (err) {
+                        logger.error('ws: Global broadcast failed:', err);
+                    }
+                });
+            } catch (err) {
+                logger.error('ws: Global broadcast exception:', err);
+            }
+        }
+    });
+}
+
+/**
  * 主函数，启动服务器
  */
 async function main() {
     // 中间件顺序很重要
     app.use(bodyParser());
     app.use(cors({
-        origin: '*',
+        origin: (ctx) => {
+            // 允许来自特定域的请求，或者在开发环境下允许所有
+            const origin = ctx.get('Origin');
+            return origin || '*';
+        },
+        credentials: true,
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['*'],
+        allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
     }));
 
     // API 路由 (后端)
@@ -192,23 +294,23 @@ async function main() {
                 let systemMsgText = null;
 
                 if (message.type === 'change_problem_request') {
-                    systemMsgText = `队伍 ${message.data.requesterTeam} 发起了换题请求：${message.data.problemTitle}`;
+                    systemMsgText = `队伍 ${escapeHtml(message.data.requesterTeam)} 发起了换题请求：${escapeHtml(message.data.problemTitle)}`;
                 } else if (message.type === 'change_problem_result') {
-                    systemMsgText = message.data.message;
+                    systemMsgText = escapeHtml(message.data.message);
                 } else if (message.type === 'contest_action_request') {
                     const actionName = message.data.type === 'draw' ? '平局' : '认输';
-                    systemMsgText = message.data.type === 'draw' ? `有人发起了${actionName}请求` : `队伍 ${message.data.requesterTeam} 发起了${actionName}请求`;
+                    systemMsgText = message.data.type === 'draw' ? `有人发起了${actionName}请求` : `队伍 ${escapeHtml(message.data.requesterTeam)} 发起了${actionName}请求`;
                 } else if (message.type === 'contest_action_result') {
                     // 处理成功和失败的情况
-                    systemMsgText = message.data.message;
+                    systemMsgText = escapeHtml(message.data.message);
                     // 这里不再追加 Rating 信息，让其由 contest_update 独立生成
                 } else if (message.type === 'contest_update' && message.status === 2) {
                     // 无论是否开启 rated，只要比赛状态变为 2 (已结束)，始终生成结束消息
-                    let systemMsgContent = (message.data && message.data.message) ? `${message.data.message}\nRating 变动如下：` : '比赛已结束！\nRating 变动如下：';
+                    let systemMsgContent = (message.data && message.data.message) ? `${escapeHtml(message.data.message)}\nRating 变动如下：` : '比赛已结束！\nRating 变动如下：';
                     if (message.ratingChanges && Object.keys(message.ratingChanges).length > 0) {
                         for (const [username, change] of Object.entries(message.ratingChanges)) {
                             const deltaStr = change.delta >= 0 ? `+${change.delta}` : `${change.delta}`;
-                            systemMsgContent += `\n${username}: ${change.oldRating} -> ${change.newRating} (${deltaStr})`;
+                            systemMsgContent += `\n${escapeHtml(username)}: ${change.oldRating} -> ${change.newRating} (${deltaStr})`;
                         }
                     } else {
                         systemMsgContent += '\nRating 将不会被计算。';
@@ -216,7 +318,7 @@ async function main() {
                     systemMsgText = systemMsgContent;
                 } else if (message.type === 'system_message' && message.message) {
                     // 已经是 system_message 类型，只需确保持久化 (避免重复广播)
-                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', message.message, 'all');
+                    await storeMessage('system_message', message.contestId, null, 'SYSTEM', escapeHtml(message.message), 'all');
                     return;
                 }
 
@@ -246,7 +348,25 @@ async function main() {
     });
 
     // WebSocket连接处理
-    wss.on('connection', async (ws) => {
+    wss.on('connection', async (ws, request) => {
+        ws.isAlive = true;
+
+        // 从 Cookie 中获取用户信息
+        const cookies = parseCookies(request.headers.cookie);
+        const username = cookies.username;
+        const token = cookies.token;
+
+        if (username && token) {
+            const authResult = await verifyUser({ username, token });
+            if (authResult.success) {
+                ws.username = authResult.username;
+                logger.debug(`ws: User ${ws.username} connected via WebSocket`);
+            }
+        }
+
+        ws.on('pong', () => {
+            ws.isAlive = true;
+        });
 
         ws.on('message', async (message) => {
             try {
@@ -274,27 +394,110 @@ async function main() {
                         logger.error('ws: Failed to fetch room history: ', error);
                     }
                 }
+                else if (data.type === 'join_global') {
+                    globalClients.add(ws);
+                    ws.isGlobal = true;
+                    logger.debug(`ws: Client ${ws._socket.remoteAddress} joined global chat`);
+
+                    // 发送历史消息
+                    try {
+                        const history = await getGlobalMessages();
+                        if (history && history.length > 0) {
+                            ws.send(JSON.stringify({
+                                type: 'global_history',
+                                history: history
+                            }));
+                        }
+                    } catch (error) {
+                        logger.error('ws: Failed to fetch global history: ', error);
+                    }
+                }
+                else if (data.type === 'global_chat') {
+                    if (!ws.username || !data.message) {
+                        logger.warn('ws: Invalid global chat message or unauthenticated user: ', data);
+                        return;
+                    }
+                    // 转义 HTML
+                    data.message = escapeHtml(data.message);
+
+                    if (data.message.length > config.content.maxMessageLength) {
+                        logger.warn(`ws: Global chat message too long (${data.message.length}) from ${ws.username}`);
+                        return;
+                    }
+                    // 速率限制检查
+                    if (!checkRateLimit(ws.username)) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: '消息发送频率过快，请稍后再试'
+                        }));
+                        return;
+                    }
+
+                    // AI 内容审查
+                    const moderation = await moderateText(data.message);
+                    if (!moderation.isSafe) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: `消息未通过审查: ${moderation.reason}`
+                        }));
+                        return;
+                    }
+
+                    try {
+                        await storeGlobalMessage(ws.username, data.message);
+                        broadcastToGlobal({
+                            type: 'global_chat',
+                            sender: ws.username,
+                            message: data.message,
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (error) {
+                        logger.error('ws: Failed to process global chat: ', error);
+                    }
+                }
                 else if (data.type === 'room_chat') {
                     // 房间聊天处理
-                    if (!data.roomId || !data.sender || !data.message) {
-                        logger.warn('ws: Invalid room chat message: ', data);
+                    if (!data.roomId || !ws.username || !data.message) {
+                        logger.warn('ws: Invalid room chat message or unauthenticated user: ', data);
                         return;
                     }
+                    // 转义 HTML
+                    data.message = escapeHtml(data.message);
+
                     // 消息长度校验
                     if (data.message.length > config.content.maxMessageLength) {
-                        logger.warn(`ws: Room chat message too long (${data.message.length}) from ${data.sender}`);
+                        logger.warn(`ws: Room chat message too long (${data.message.length}) from ${ws.username}`);
                         return;
                     }
-                    logger.debug(`ws: Received room chat: ${data.message} User: ${data.sender} Room: ${data.roomId}`);
+                    // 速率限制检查
+                    if (!checkRateLimit(ws.username)) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: '消息发送频率过快，请稍后再试'
+                        }));
+                        return;
+                    }
+
+                    // AI 内容审查
+                    const moderation = await moderateText(data.message);
+                    if (!moderation.isSafe) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: `消息未通过审查: ${moderation.reason}`
+                        }));
+                        return;
+                    }
+
+                    logger.debug(`ws: Received room chat: ${data.message} User: ${ws.username} Room: ${data.roomId}`);
                     try {
                         // 存储消息
-                        await storeRoomMessage(data.roomId, data.sender, data.message);
+                        await storeRoomMessage(data.roomId, ws.username, data.message);
 
                         // 广播给房间所有人
                         broadcastToRoom(data.roomId, {
                             type: 'room_chat',
                             roomId: data.roomId,
-                            sender: data.sender,
+                            sender: ws.username,
                             message: data.message,
                             timestamp: new Date().toISOString()
                         });
@@ -405,23 +608,45 @@ async function main() {
 
                 } else if (data.type === 'chat_message') {
                     // 输入验证
-                    if (!data.contestId || !data.sender || !data.message || !data.mode) {
-                        logger.warn('ws: Invalid chat message: ', data);
+                    if (!data.contestId || !ws.username || !data.message || !data.mode) {
+                        logger.warn('ws: Invalid chat message or unauthenticated user: ', data);
                         return;
                     }
+                    // 转义 HTML
+                    data.message = escapeHtml(data.message);
+
                     // 消息长度校验
                     if (data.message.length > config.content.maxMessageLength) {
-                        logger.warn(`ws: Contest chat message too long (${data.message.length}) from ${data.sender}`);
+                        logger.warn(`ws: Contest chat message too long (${data.message.length}) from ${ws.username}`);
                         return;
                     }
-                    logger.debug(`ws: Received chat message: ${data.message} User: ${data.sender} Mode: ${data.mode}`);
+                    // 速率限制检查
+                    if (!checkRateLimit(ws.username)) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: '消息发送频率过快，请稍后再试'
+                        }));
+                        return;
+                    }
+
+                    // AI 内容审查
+                    const moderation = await moderateText(data.message);
+                    if (!moderation.isSafe) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: `消息未通过审查: ${moderation.reason}`
+                        }));
+                        return;
+                    }
+
+                    logger.debug(`ws: Received chat message: ${data.message} User: ${ws.username} Mode: ${data.mode}`);
                     try {
                         // 存储消息
                         await storeMessage(
                             data.type,
                             data.contestId,
                             data.mode === 'team' ? ws.teamId : null,
-                            data.sender,
+                            ws.username,
                             data.message,
                             data.mode
                         );
@@ -433,7 +658,7 @@ async function main() {
                         // 全局消息发送给比赛所有人
                         broadcastToContest(data.contestId, {
                             type: 'chat_message',
-                            sender: data.sender,
+                            sender: ws.username,
                             message: data.message,
                             mode: 'all',
                             timestamp: new Date().toISOString()
@@ -444,7 +669,7 @@ async function main() {
                         if (clients) {
                             const teamData = JSON.stringify({
                                 type: 'chat_message',
-                                sender: data.sender,
+                                sender: ws.username,
                                 message: data.message,
                                 mode: 'team',
                                 teamId: ws.teamId,
@@ -471,6 +696,9 @@ async function main() {
                         logger.warn('ws: Invalid system message: ', data);
                         return;
                     }
+                    // 转义 HTML
+                    data.message = escapeHtml(data.message);
+
                     logger.debug(`ws: Received system message: ${data.message} Contest: ${data.contestId}`);
                     try {
                         // 存储系统消息
@@ -517,7 +745,23 @@ async function main() {
                     }
                 }
             }
+            if (ws.isGlobal) {
+                globalClients.delete(ws);
+            }
         });
+    });
+
+    // WebSocket 心跳检测
+    const interval = setInterval(() => {
+        wss.clients.forEach((ws) => {
+            if (ws.isAlive === false) return ws.terminate();
+            ws.isAlive = false;
+            ws.ping();
+        });
+    }, 30000);
+
+    wss.on('close', () => {
+        clearInterval(interval);
     });
 
     // 定时检查比赛是否超时

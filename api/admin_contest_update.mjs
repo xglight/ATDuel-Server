@@ -8,16 +8,16 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function updateContest(ctx) {
-    const { contestId, token, startTime, endTime, rated, status } = ctx.request.body;
+    const { contestId, startTime, endTime, rated, status } = ctx.request.body;
 
-    if (!contestId || !token) {
+    if (!contestId) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'contestId 和 Token 均不能为空' };
+        ctx.body = { success: false, message: 'contestId 不能为空' };
         return;
     }
 
     try {
-        if (!(await verifyAdmin(token))) {
+        if (!(await verifyAdmin(ctx))) {
             ctx.status = 401;
             ctx.body = { success: false, message: '管理员权限校验失败' };
             return;

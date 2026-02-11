@@ -1,5 +1,6 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 更新用户在 AtCoder 上的 AC 记录
@@ -82,13 +83,15 @@ export async function updateUserAC(username) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function user_ac_update(ctx) {
-    const { username } = ctx.request.body;
-
-    if (!username) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: '用户名不能为空' };
+    // 校验 Token
+    const authResult = await verifyUser(ctx);
+    if (!authResult.success) {
+        ctx.status = 401;
+        ctx.body = { success: false, message: '未登录或已过期' };
         return;
     }
+
+    const username = authResult.username;
 
     const result = await updateUserAC(username);
     if (result.error) {

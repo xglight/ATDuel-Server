@@ -2,6 +2,7 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 import requestStore from '../tools/change_request_store.mjs';
+import { verifyAdmin } from '../utils/auth.mjs';
 
 /**
  * 结束比赛并计算 Rating 变动的核心逻辑
@@ -222,6 +223,12 @@ async function contest_final(ctx) {
     }
 
     try {
+        if (!(await verifyAdmin(ctx))) {
+            ctx.status = 401;
+            ctx.body = { success: false, message: '管理员权限校验失败' };
+            return;
+        }
+
         const result = await finalizeContest(contestId);
 
         if (result.success && result.message !== '比赛已经结算') {

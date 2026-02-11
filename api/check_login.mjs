@@ -1,6 +1,6 @@
-// check_login.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 检查登录状态接口
@@ -9,38 +9,23 @@ import logger from '../logger.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function check_login(ctx) {
-    const { username, token } = ctx.request.body;
-
-    if (!username || !token) {
-        ctx.status = 400;
-        ctx.body = {
-            success: false,
-            message: '用户名和 Token 均不能为空'
-        };
-        return;
-    }
-
-    logger.debug(`check_login: 正在检查用户 ${username} 的登录状态`);
+    logger.debug(`check_login: 正在检查登录状态`);
 
     try {
-        // 并行获取登录状态和封禁状态
-        const [[loginRecords], [banRecords]] = await Promise.all([
-            pool.execute(
-                'SELECT loginTime, rememberMe FROM login_status WHERE username = ? AND token = ? LIMIT 1',
-                [username, token]
-            ),
-            pool.execute(
-                'SELECT endBanTime FROM user_ban WHERE username = ? AND endBanTime > CURRENT_TIMESTAMP ORDER BY endBanTime DESC LIMIT 1',
-                [username]
-            )
-        ]);
-
-        if (loginRecords.length === 0) {
-            logger.debug(`check_login: 用户 ${username} 未登录或 Token 无效`);
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '用户未登录' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
+
+        const { username, token, rememberMe } = authResult;
+
+        // 检查封禁状态
+        const [banRecords] = await pool.execute(
+            'SELECT endBanTime FROM user_ban WHERE username = ? AND endBanTime > CURRENT_TIMESTAMP ORDER BY endBanTime DESC LIMIT 1',
+            [username]
+        );
 
         if (banRecords.length > 0) {
             const activeBan = banRecords[0];
@@ -53,34 +38,30 @@ async function check_login(ctx) {
             return;
         }
 
-        // 3. 检查登录是否过期
-        const loginTime = new Date(loginRecords[0].loginTime);
-        const now = Date.now();
-        const rememberMe = loginRecords[0].rememberMe || 0;
+        // 登录有效且未封禁，续租 Cookie (延长有效期)
+        const maxAge = (rememberMe ? 7 : 1) * 24 * 60 * 60 * 1000;
 
-        // 如果勾选了记住我，有效期 7 天，否则 1 天
-        const expireTime = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        ctx.cookies.set('username', username, {
+            maxAge,
+            httpOnly: false,
+            path: '/',
+            overwrite: true
+        });
+        ctx.cookies.set('token', token, {
+            maxAge,
+            httpOnly: true,
+            path: '/',
+            overwrite: true
+        });
 
-        if (now - loginTime.getTime() < expireTime) {
-            // 延长登录有效期
-            await pool.execute(
-                'UPDATE login_status SET loginTime = CURRENT_TIMESTAMP WHERE username = ? AND token = ?',
-                [username, token]
-            );
-            ctx.status = 200;
-            ctx.body = { success: true, message: '登录状态有效' };
-        } else {
-            // 已过期，清理记录
-            await pool.execute(
-                'DELETE FROM login_status WHERE username = ? AND token = ?',
-                [username, token]
-            );
-            logger.info(`check_login: 用户 ${username} 登录已过期`);
-            ctx.status = 401;
-            ctx.body = { success: false, message: '登录已过期，请重新登录' };
-        }
+        ctx.status = 200;
+        ctx.body = {
+            success: true,
+            message: '登录状态有效',
+            data: { username }
+        };
     } catch (error) {
-        logger.error(`check_login: 检查用户 ${username} 登录状态时发生错误: ${error.message}`);
+        logger.error(`check_login: 检查登录状态时发生错误: ${error.message}`);
         ctx.status = 500;
         ctx.body = {
             success: false,

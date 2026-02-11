@@ -7,15 +7,15 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function addBulletin(ctx) {
-    const { title, content, token, date } = ctx.request.body;
+    const { title, content, date } = ctx.request.body;
 
-    if (!title || !content || !token) {
+    if (!title || !content) {
         ctx.status = 400;
-        ctx.body = { success: false, message: '标题、内容和 Token 均不能为空' };
+        ctx.body = { success: false, message: '标题和内容均不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;
@@ -49,15 +49,15 @@ async function addBulletin(ctx) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function updateBulletin(ctx) {
-    const { id, title, content, token, date } = ctx.request.body;
+    const { id, title, content, date } = ctx.request.body;
 
-    if (!id || !title || !content || !token) {
+    if (!id || !title || !content) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'ID、标题、内容和 Token 均不能为空' };
+        ctx.body = { success: false, message: 'ID、标题和内容均不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;
@@ -91,15 +91,15 @@ async function updateBulletin(ctx) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function deleteBulletin(ctx) {
-    const { id, token } = ctx.request.body;
+    const { id } = ctx.request.body;
 
-    if (!id || !token) {
+    if (!id) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'ID 和 Token 均不能为空' };
+        ctx.body = { success: false, message: 'ID 不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;

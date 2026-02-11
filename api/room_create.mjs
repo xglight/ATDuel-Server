@@ -3,6 +3,7 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 import config from '../config.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 
 /**
@@ -25,29 +26,21 @@ function randomString(length) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function createRoom(ctx) {
-    const { username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated, categories } = ctx.request.body;
+    const { playerCount, difficultyMin, difficultyMax, problemCount, isRated, categories } = ctx.request.body;
 
-    // 参数验证
-    if (!username || !token) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: '用户名和 Token 不能为空' };
-        return;
-    }
-
-    logger.debug(`room_create: 正在为房主创建房间: ${username}`);
+    logger.debug(`room_create: 正在创建房间`);
 
     try {
         // 校验 Token
-        const [loginRows] = await pool.execute(
-            'SELECT username FROM login_status WHERE username = ? AND token = ?',
-            [username, token]
-        );
-
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`room_create: 正在为房主创建房间: ${username}`);
 
         const roomUrl = randomString(20);
         const now = new Date();

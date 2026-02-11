@@ -3,6 +3,7 @@
 import pool from '../db.mjs';
 import config from '../config.mjs';
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 // 判题冷却时间管理 (内存存储)
 const lastJudgedTimes = new Map();
@@ -77,21 +78,22 @@ async function processTeamSubmissions(team, problemName, subdata, startTime, pro
  */
 async function submission_update(ctx) {
     try {
-        const { problemTitle, contestId, username, token } = ctx.request.body;
-        if (!problemTitle || !contestId || !username || !token) {
+        const { problemTitle, contestId } = ctx.request.body;
+        if (!problemTitle || !contestId) {
             ctx.status = 200;
             ctx.body = { success: false, message: '参数无效' };
             return;
         }
 
         // 校验 Token
-        const [loginRows] = await pool.execute('SELECT * FROM login_status WHERE username = ? AND token = ?', [username, token]);
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             return;
         }
 
+        const username = authResult.username;
         const problemName = problemTitle.split('-')[0].trim();
         // 获取当前比赛数据
         const [contestRows] = await pool.execute('SELECT * FROM contest WHERE url = ?', [contestId]);

@@ -2,15 +2,16 @@
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
 import config from '../config.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 修改房间设置接口
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function updateRoomSetting(ctx) {
-    const { roomId: roomUrl, username, token, playerCount, difficultyMin, difficultyMax, problemCount, isRated, categories } = ctx.request.body;
+    const { roomId: roomUrl, playerCount, difficultyMin, difficultyMax, problemCount, isRated, categories } = ctx.request.body;
 
-    if (!roomUrl || !username || !token) {
+    if (!roomUrl) {
         ctx.status = 400;
         ctx.body = { success: false, message: '缺少必要参数' };
         return;
@@ -22,17 +23,16 @@ async function updateRoomSetting(ctx) {
         await conn.beginTransaction();
 
         // 校验 Token
-        const [loginRows] = await conn.execute(
-            'SELECT username FROM login_status WHERE username = ? AND token = ?',
-            [username, token]
-        );
-
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             await conn.rollback();
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`room_update_setting: 用户 ${username} 正在修改房间 ${roomUrl} 的设置`);
 
         // 获取房间信息并加锁
         const [roomRows] = await conn.execute(

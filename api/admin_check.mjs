@@ -4,34 +4,31 @@ import logger from '../logger.mjs';
 import { verifyAdmin } from '../utils/auth.mjs';
 
 /**
- * 管理员登录状态校验接口
+ * 检查管理员登录状态接口
+ * 
  * @param {import('koa').Context} ctx - Koa 上下文
  */
-async function checkAdminLogin(ctx) {
-    const { token } = ctx.request.body;
-
-    if (!token) {
-        ctx.status = 400;
-        ctx.body = { success: false, message: 'Token 不能为空' };
-        return;
-    }
-    logger.debug(`admin_check: 管理员登录检查: ${token}`);
+async function adminCheck(ctx) {
+    logger.debug('admin_check: 正在检查管理员登录状态');
 
     try {
-        if (await verifyAdmin(token)) {
+        const isValid = await verifyAdmin(ctx);
+
+        if (isValid) {
             ctx.status = 200;
-            ctx.body = { success: true, message: '登录状态有效' };
+            ctx.body = { success: true, message: '管理员登录状态有效' };
         } else {
+            logger.info('admin_check: 管理员登录状态无效或已过期');
             ctx.status = 401;
-            ctx.body = { success: false, message: '管理员未登录或已过期' };
+            ctx.body = { success: false, message: '未授权，请重新登录' };
         }
-    } catch (error) {
-        logger.error(`admin_check: 查询错误: ${error.message}`);
+    } catch (err) {
+        logger.error(`admin_check: 检查管理员登录状态失败: ${err.message}`);
         ctx.status = 500;
         ctx.body = { success: false, message: '服务器内部错误' };
     }
 }
 
 export default {
-    'POST /admin/check': checkAdminLogin
+    'POST /admin/check': adminCheck
 };

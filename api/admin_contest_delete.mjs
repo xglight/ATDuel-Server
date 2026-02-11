@@ -7,14 +7,14 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function deleteContest(ctx) {
-    const { contestId, token } = ctx.request.body;
-    if (!contestId || !token) {
+    const { contestId } = ctx.request.body;
+    if (!contestId) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'contestId 和 Token 均不能为空' };
+        ctx.body = { success: false, message: 'contestId 不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;
@@ -45,7 +45,7 @@ async function deleteContest(ctx) {
             conn.execute('DELETE FROM contest_ratings WHERE contest_id = ?', [id]),
             conn.execute('DELETE FROM contest_messages WHERE contest_id = ?', [contestId])
         ]);
-        
+
         await conn.execute('DELETE FROM contest WHERE id = ?', [id]);
 
         await conn.commit();

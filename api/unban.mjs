@@ -8,14 +8,14 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function unbanUser(ctx) {
-    const { username, token } = ctx.request.body;
-    if (!username || !token) {
+    const { username } = ctx.request.body;
+    if (!username) {
         ctx.status = 400;
-        ctx.body = { success: false, message: '用户名和 Token 均不能为空' };
+        ctx.body = { success: false, message: '用户名不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;

@@ -1,6 +1,7 @@
 //room_user_update.mjs
 import pool from '../db.mjs';
 import logger from '../logger.mjs';
+import { verifyUser } from '../utils/auth.mjs';
 
 /**
  * 存储房间消息
@@ -20,17 +21,15 @@ async function storeRoomMessage(roomUrl, sender, message) {
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function updateRoomUser(ctx) {
-    const { roomId: roomUrl, op: operation, team: targetTeam, username, token, targetUsername } = ctx.request.body;
+    const { roomId: roomUrl, op: operation, team: targetTeam, targetUsername } = ctx.request.body;
     const position = ctx.request.body.pos || 0;
 
     // 参数验证
-    if (!roomUrl || operation === undefined || (operation !== 2 && targetTeam === undefined) || !username || !token) {
+    if (!roomUrl || operation === undefined || (operation !== 2 && targetTeam === undefined)) {
         ctx.status = 400;
         ctx.body = { success: false, message: '缺少必要参数' };
         return;
     }
-
-    logger.debug(`room_user_update: 正在更新成员信息, 用户: ${username}, 房间: ${roomUrl}, 操作: ${operation}, 队伍: ${targetTeam}, 位置: ${position}, 目标用户: ${targetUsername}`);
 
     let conn;
     try {
@@ -38,17 +37,16 @@ async function updateRoomUser(ctx) {
         await conn.beginTransaction();
 
         // 校验 Token
-        const [loginRows] = await conn.execute(
-            'SELECT username FROM login_status WHERE username = ? AND token = ?',
-            [username, token]
-        );
-
-        if (loginRows.length === 0) {
+        const authResult = await verifyUser(ctx);
+        if (!authResult.success) {
             ctx.status = 401;
-            ctx.body = { success: false, message: '未登录或 Token 无效' };
+            ctx.body = { success: false, message: '未登录或已过期' };
             await conn.rollback();
             return;
         }
+
+        const username = authResult.username;
+        logger.debug(`room_user_update: 正在更新成员信息, 用户: ${username}, 房间: ${roomUrl}, 操作: ${operation}, 队伍: ${targetTeam}, 位置: ${position}, 目标用户: ${targetUsername}`);
 
         // 获取房间信息和锁
         const [rows] = await conn.execute('SELECT id, url, master, setting_mode, setting_rating_lowest, setting_rating_highest, setting_problem_count, setting_categories, rated FROM room WHERE url = ? FOR UPDATE', [roomUrl]);

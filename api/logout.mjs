@@ -9,13 +9,20 @@ import logger from '../logger.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function logout(ctx) {
-    const { username, token } = ctx.request.body;
+    const username = ctx.cookies.get('username');
+    const token = ctx.cookies.get('token');
+
+    // 清除所有可能的鉴权 Cookie
+    const cookieOptions = { path: '/', maxAge: 0 };
+    ctx.cookies.set('username', null, cookieOptions);
+    ctx.cookies.set('token', null, cookieOptions);
+    ctx.cookies.set('admin_token', null, cookieOptions);
 
     if (!username || !token) {
-        ctx.status = 400;
+        ctx.status = 200;
         ctx.body = {
-            success: false,
-            message: '用户名和 Token 不能为空'
+            success: true,
+            message: '登出成功'
         };
         return;
     }

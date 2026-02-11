@@ -1,6 +1,7 @@
 // login.mjs
 import pool from '../db.mjs';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import logger from '../logger.mjs';
 import { getAtAvatarPath } from './atAvator.mjs';
 
@@ -11,13 +12,13 @@ import { getAtAvatarPath } from './atAvator.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function login(ctx) {
-    const { username, password, token, rememberMe = 0 } = ctx.request.body;
+    const { username, password, rememberMe = 0 } = ctx.request.body;
 
-    if (!username || !password || !token) {
+    if (!username || !password) {
         ctx.status = 400;
         ctx.body = {
             success: false,
-            message: '用户名、密码和 Token 不能为空'
+            message: '用户名和密码不能为空'
         };
         return;
     }
@@ -82,13 +83,34 @@ async function login(ctx) {
             }
         }).catch(err => logger.warn(`login: 无法为 ${username} 获取头像: ${err.message}`));
 
-        // 2. 记录登录状态
+        // 2. 生成服务器端 Token
+        const token = crypto.randomBytes(32).toString('hex');
+
+        // 3. 记录登录状态 (如果已登录则更新 Token 和登录时间)
         await pool.execute(
             `INSERT INTO login_status (username, token, loginTime, rememberMe) 
              VALUES (?, ?, CURRENT_TIMESTAMP, ?) 
-             ON DUPLICATE KEY UPDATE loginTime = CURRENT_TIMESTAMP, rememberMe = VALUES(rememberMe)`,
+             ON DUPLICATE KEY UPDATE 
+                token = VALUES(token), 
+                loginTime = CURRENT_TIMESTAMP, 
+                rememberMe = VALUES(rememberMe)`,
             [username, token, rememberMe]
         );
+
+        // 4. 设置 HttpOnly Cookie
+        const maxAge = (rememberMe ? 7 : 1) * 24 * 60 * 60 * 1000;
+        ctx.cookies.set('username', username, {
+            maxAge,
+            httpOnly: false, // 用户名可以被前端读取
+            path: '/',
+            overwrite: true
+        });
+        ctx.cookies.set('token', token, {
+            maxAge,
+            httpOnly: true, // Token 不允许前端读取
+            path: '/',
+            overwrite: true
+        });
 
         logger.info(`login: 用户 ${username} 登录成功`);
         ctx.status = 200;

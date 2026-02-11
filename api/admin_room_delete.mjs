@@ -7,14 +7,14 @@ import { verifyAdmin } from '../utils/auth.mjs';
  * @param {import('koa').Context} ctx - Koa 上下文
  */
 async function deleteRoom(ctx) {
-    const { roomId, token } = ctx.request.body;
-    if (!roomId || !token) {
+    const { roomId } = ctx.request.body;
+    if (!roomId) {
         ctx.status = 400;
-        ctx.body = { success: false, message: 'roomId 和 Token 均不能为空' };
+        ctx.body = { success: false, message: 'roomId 不能为空' };
         return;
     }
 
-    if (!(await verifyAdmin(token))) {
+    if (!(await verifyAdmin(ctx))) {
         ctx.status = 401;
         ctx.body = { success: false, message: '管理员权限校验失败' };
         return;
